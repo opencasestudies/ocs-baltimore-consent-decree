@@ -1,5 +1,5 @@
 ---
-title: OpenCaseStudies Template
+title: Consent Decree and Arrest Rates
 output: 
     html_document:
         theme: cosmo 
@@ -9,20 +9,270 @@ output:
         number_sections: false
 ---
 
+#Must do
+
++ Finish wrangling census data for white population
+
++ Copy wrangling for black population
+
++ Wrangle arrest data
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Motivation 
 
+**Outline**
+
+1.  Freddie Gray
+    + 1.1.  Who was Freddie Gray?
+    + 1.2.  What happened to Freddie Gray? 
+2.  What happened after the death of Freddie Gray?
+    + 2.1.  Baltimore Riots
+    + 2.2.  Mayor Blake requests a DOJ investigation
+4.  DOJ investigation findings
+    + 3.1.  Unconstitutional policing practices.
+    + 3.1.1  Unconstitutional stops
+5.  Consent Decree
+    + 5.1. What is a consent decree? 
+    + 5.2. What was its purpose? 
+6.  What will we be trying to accomplish together? 
+
+Following the death of Freddie Gray on April 12^th, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge 
+
+After finding inappropriate practices committed by the Baltimore Police Deparment (BPD) during a Department of Justice (DoJ) investigation, a consent decree was put in place between the DoJ and BPD.
+
+*WHAT WAS THE GOAL OF THE CONSENT DECREE?*
+
+For more information on the Baltimore Consent Decree, see this [article](https://www.baltimoresun.com/news/maryland/crime/bs-md-ci-consent-decree-explainer-20180403-story.html) from the Baltimore Sun.
+
 # What is the data? 
 
-# Data import
+The analysis uses data from two sources:
+
++ OpenData
+
++ American Community Survey
+
+# Data import {#data-import}
+
+Before we import the data, let us think about the project. At the heart of our analysis is poisson regression involving time, meaning we'll need to check our statistical assumptions down the line and account for possible temporal trends. We'll also be modifying, but not altering, the data substantially for this analysis since the data we downloaded does not come in a form that is ready to analyze---this process is called *data wrangling*. Lastly, we'll be making visualizations to help us identify what would otherwise be complicated patterns in the data. It would help to have forge multiple visualizations into one. 
+
+A few packages immediately come to mind: 
+
++ `dplyr`, for data wranging and summarization
+
++ `ggplot2`, for beautiful visualizations with ready data
+
++ `gridExtra`, for creating visually-appealing plots of plots
+
++ `lubridate`, for converting time data into a form that can be used
+
+We'll load other packages as we encounter roadblocks. 
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(lubridate)
+```
+
+We import arrest data, as well as census data by race. These files were downloaded from [American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/guided_search.xhtml) and [Open Baltimore](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
+
+```{r}
+BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv", header=FALSE)
+head(BPD_Arrests_March1[,1:5])
+```
+
+```{r}
+BaltimoreWhitePop <- read.csv("ACS_17_5YR_B01001A_W.csv", header=FALSE) #Update this to reflect download name of csv from actual source.
+head(BaltimoreWhitePop[,1:5])
+```
+
+```{r}
+BaltimoreBlackPop <- read.csv("ACS_17_5YR_B01001B_BAA.csv", header=FALSE) #Update this to reflect download name of csv from actual source.
+head(BaltimoreBlackPop[,1:5])
+```
+
+We then look at the dimensions of each dataframe to get a handle on how large or complicated the dataframes are. 
+
+The dataframe for arrests in Baltimore has `r dim(BPD_Arrests_March1)[1]` rows and `r dim(BPD_Arrests_March1)[2]` columns.
+
+```{r}
+dim(BPD_Arrests_March1)
+```
+
+The dataframe for the White population in Baltimore has `r dim(BaltimoreWhitePop)[1]` rows and `r dim(BaltimoreWhitePop)[2]` columns.
+
+```{r}
+dim(BaltimoreWhitePop)
+```
+
+The dataframe for the Black population in Baltimore has `r dim(BaltimoreBlackPop)[1]` rows and `r dim(BaltimoreBlackPop)[2]` columns.
+
+```{r}
+dim(BaltimoreBlackPop)
+```
+
+Now that we know a little bit about our dataframes, we can begin the process of transforming them for our analysis.
 
 # Data wrangling 
 
+Sometimes imported dataframes follow a rigorous codified format. This is more than often the case with very well maintained data. Codified dataframes often require a corresponding codebook.
+
+We imported the dataframes without designating headers for this very reason. Census dataframes are often codified and contain a second set of headers for practical use. Although making the dataframe more functional is still possible without this step, importing the data in this way saves us a few steps.
+
+Our arrest data has practical field names and no second set of headers. Our census data has two sets of headers. 
+
+Our first glance at the census data (see [Data Import](#data-import)) revealed that the first rows of the census data we imported are codified while the second rows are practically named.
+
+We will use the second rows of the census data as field names. This will allow different fields to be easily discernable from one another. 
+
+This can be done simply by treating the second row as a list comprised of character class items. 
+
+```{r}
+colnames(BaltimoreWhitePop) <- as.character(BaltimoreWhitePop[2,])
+colnames(BaltimoreWhitePop[,1:5])
+```
+
+Our colnames are now a set of numbers. This is because *EXPLANATION*. *EXPLAIN WHY USING THESE COLNAMES WOULD BE A TERRIBLE IDEA*
+
+We cannot take an object that is a non-matrix-like object and the `colnames()` functions together. `colnames()` only recognizes matrix-like objects (see `?colnames()`.
+
+We can transform the second row of the dataframe using the `unlist()` function, which produces a vector (a matrix-like object) from an object. 
+
+```{r}
+colnames(BaltimoreWhitePop) <- as.character(unlist(BaltimoreWhitePop[2,]))
+colnames(BaltimoreWhitePop[,1:5])
+```
+
+Now that we have appropriate headers, let us look at our dataframes.
+
+```{r}
+head(BaltimoreWhitePop[,1:5])
+```
+
+For each column, there is a field name, the original codified row, and the practical row we used to designate our field names. We can remove these now that we have appropriate field names
+
+```{r}
+BaltimoreWhitePop <- BaltimoreWhitePop[-(1:2),]
+```
+
+The census dataframes we imported are grouped by age group and gender. Each estimate has a corresponding margin of error. For this analysis, we will only be using the provided estimates. 
+
+For efficiency, we should discard any data that will not be used in our analysis. We could manually remove one column at a time with multiple lines of code. This would take some time and and may involve some trial and error. 
+
+Instead, we will use `substr` to take our character class field names and identify the fields we will need. 
+
+`substr` searches for a distinct character string within a portion of the characters in a string. Below, we search for `Estimate` within the 1^st through 8^th characters in each field name and then save the columns that meet that criteria. We also save and rename the `Geography` column as good practice. Rownames are removed to avoid later confusion. 
+
+```{r}
+Geography <- BaltimoreWhitePop$Geography
+BaltimoreWhitePop <- cbind(Geography,
+        BaltimoreWhitePop[, substr(colnames(BaltimoreWhitePop),1,8)=="Estimate"])
+rownames(BaltimoreWhitePop) <- c()
+head(BaltimoreWhitePop[,1:5])
+```
+
+Let us look at our new column names.
+
+```{r, echo=FALSE}
+colnames(BaltimoreWhitePop)
+```
+
+`"Estimate; "` is in nearly every column name in our new dataframe. Let's remove it to have an even more practical dataframe. To do this, we will use `str_remove` from the `stringr` package.
+
+```{r}
+library(stringr)
+```
+
+```{r}
+colnames(BaltimoreWhitePop) <- str_remove(colnames(BaltimoreWhitePop),"Estimate; ")
+```
+
+Our new column names are much simpler.
+
+```{r}
+colnames(BaltimoreWhitePop)
+```
+
+Let's remove symbols, spaces, and `years` from our field names. The expression `[[:punct:]]` encompasses a wide range of symbols. `str_replace_all` differs from `str_replace` in that it is used to replace patterns for the entire string.
+
+```{r}
+colnames(BaltimoreWhitePop) <- str_replace_all(colnames(BaltimoreWhitePop), "[[:punct:]]", "")
+colnames(BaltimoreWhitePop) <- str_replace_all(colnames(BaltimoreWhitePop), " ", "")
+colnames(BaltimoreWhitePop) <- str_replace_all(colnames(BaltimoreWhitePop), "years", "")
+```
+
+Now our column names are practical and concise.
+
+```{r}
+colnames(BaltimoreWhitePop)
+```
+
+We need to organize our dataframe to have a single column for age group and a single column gender. This data format is known as *long format* and is required to efficiently create data visualizations with the `ggplot` package. Doing this will also allow us to use more appropriate variables such as age group and gender as well as the specific age group-gender combinations the dataframe currently provides. 
+
+Our dataframe is still a bit messy. It is currently in wide format has two variables of interest in nearly every column. We need to get our dataframe into long format and remove the variable pairings. To do this we will have to collapse the count data gathered across columns into a single column current combinations and use this column to create a dataframe with age group and gender columns.
+
+We'll use the `melt()` function from the `reshape2` package to reorganize the data into long format. 
+
+*WHY THE WARNING?*
+
+```{r}
+library(reshape2)
+
+molten.BaltimoreWhitePop <- melt(BaltimoreWhitePop, id = c("Geography"))
+head(molten.BaltimoreWhitePop)
+```
+
+We'll rename the `value` column name to `Count`
+
+```{r}
+colnames(molten.BaltimoreWhitePop)[colnames(molten.BaltimoreWhitePop)=="value"] <- "Count"
+head(molten.BaltimoreWhitePop)
+```
+
+Let us remove rows with from `variable` representing totals for each variable. This will simplify the summaries we create later with `dplyr`.
+
+```{r}
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$variable!="Total",]
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$variable!="Male",]
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$variable!="Female",]
+```
+
+Now, let us create two empty columns, `AgeGroup` and `Gender`.
+
+```{r}
+molten.BaltimoreWhitePop$AgeGroup <- NA
+molten.BaltimoreWhitePop$Gender <- NA
+head(molten.BaltimoreWhitePop)
+```
+
+Let us now fill our `AgeGroup` and `Gender` columns with information from our `variable` column. 
+
+To do this we will we will identify patterns within strings and use those specific pattern to fill up our `AgeGroup` and `Gender` columns. This will involve using the `substr()` function along with an ifelse() statement for each of our columns. We will check whether our ifelse() functions worked by combining the `sum()` and `is.na()` functions.
+
+```{r}
+molten.BaltimoreWhitePop$variable <- as.character(molten.BaltimoreWhitePop$variable)
+molten.BaltimoreWhitePop$Gender <- ifelse(substr(molten.BaltimoreWhitePop$variable,1,4)=="Male","Male",
+ifelse(substr(molten.BaltimoreWhitePop$variable,1,6)=="Female","Female",NA
+       )
+)
+molten.BaltimoreWhitePop$AgeGroup <- ifelse(substr(molten.BaltimoreWhitePop$variable,1,4)=="Male",str_replace_all(molten.BaltimoreWhitePop$variable,"Male",""),
+                                            ifelse(substr(molten.BaltimoreWhitePop$variable,1,6)=="Female",str_replace_all(molten.BaltimoreWhitePop$variable,"Female",""),NA)
+                                            )
+head(molten.BaltimoreWhitePop)
+```
+
 # Exploratory data analysis
+
+
 
 # Data analysis 
 
 # Summary of results
+
+The consent decree was followed by an increase in (approximately *X* more arrests per 1000 arrests made prior to the consent decree. Despite this increase, people who were Black were less susceptible to arrest following the implementation of the consent decree. Following the implementation of the consent decree, there were approximately *Y* less arrests of Black people per 1000 arrests made prior to its implementation. 
+
+Ultimately, the consent decree led to an overall increase in arrest rates for Black and White people in Baltimore. The consent decree did, however, reduce the disparities in arrest rates between Black and White people in Baltimore.
