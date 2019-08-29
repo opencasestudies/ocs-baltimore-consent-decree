@@ -39,9 +39,7 @@ knitr::opts_chunk$set(echo = TRUE)
     + 5.2. What was its purpose? 
 6.  What will we be trying to accomplish together? 
 
-Following the death of Freddie Gray on April 12^th, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge 
-
-After finding inappropriate practices committed by the Baltimore Police Deparment (BPD) during a Department of Justice (DoJ) investigation, a consent decree was put in place between the DoJ and BPD.
+Following the death of Freddie Gray on April 12^th^, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge.
 
 *WHAT WAS THE GOAL OF THE CONSENT DECREE?*
 
@@ -69,7 +67,7 @@ A few packages immediately come to mind:
 
 + `lubridate`, for converting time data into a form that can be used
 
-We'll load other packages as we encounter roadblocks. 
+We'll load other packages as we encounter roadblocks. For now, we'll load these packages, as it is very that likely we'll use them.
 
 ```{r, warning=FALSE, message=FALSE}
 library(dplyr)
@@ -82,18 +80,33 @@ We import arrest data, as well as census data by race. These files were download
 
 ```{r}
 BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv", header=FALSE)
-head(BPD_Arrests_March1[,1:5])
 ```
+
+```{r, eval=FALSE}
+View(BPD_Arrests_March1)
+```
+
+![](View()_1.png)
 
 ```{r}
 BaltimoreWhitePop <- read.csv("ACS_17_5YR_B01001A_W.csv", header=FALSE) #Update this to reflect download name of csv from actual source.
-head(BaltimoreWhitePop[,1:5])
 ```
+
+```{r, eval=FALSE}
+View(BaltimoreWhitePop)
+```
+
+![](View()_2.png)
 
 ```{r}
 BaltimoreBlackPop <- read.csv("ACS_17_5YR_B01001B_BAA.csv", header=FALSE) #Update this to reflect download name of csv from actual source.
-head(BaltimoreBlackPop[,1:5])
 ```
+
+```{r, eval=FALSE}
+View(BaltimoreBlackPop)
+```
+
+![](View()_3.png)
 
 We then look at the dimensions of each dataframe to get a handle on how large or complicated the dataframes are. 
 
@@ -165,7 +178,7 @@ For efficiency, we should discard any data that will not be used in our analysis
 
 Instead, we will use `substr` to take our character class field names and identify the fields we will need. 
 
-`substr` searches for a distinct character string within a portion of the characters in a string. Below, we search for `Estimate` within the 1^st through 8^th characters in each field name and then save the columns that meet that criteria. We also save and rename the `Geography` column as good practice. Rownames are removed to avoid later confusion. 
+`substr` searches for a distinct character string within a portion of the characters in a string. Below, we search for `Estimate` within the 1^st^ through 8^th^ characters in each field name and then save the columns that meet that criteria. We also save and rename the `Geography` column as good practice. Rownames are removed to avoid later confusion. 
 
 ```{r}
 Geography <- BaltimoreWhitePop$Geography
@@ -265,8 +278,104 @@ molten.BaltimoreWhitePop$AgeGroup <- ifelse(substr(molten.BaltimoreWhitePop$vari
 head(molten.BaltimoreWhitePop)
 ```
 
-# Exploratory data analysis
+We can get rid of extraneous fields now that we have the fields we need.
 
+```{r}
+molten.BaltimoreWhitePop$variable <- NULL
+```
+
+Our `count` variable should be last in our dataframe. `dplyr` could be helpful for this purpose. Let's select/subset the entire dataframe and conveniently reorder our columns. Notice that quotation marks are not necessary after piping with `dplyr`.
+
+```{r}
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop %>% select(Geography,Gender,AgeGroup,Count)
+head(molten.BaltimoreWhitePop)
+```
+
+Recall leaving the `Geography` column as good practice. Leaving columns specific to a dataframe allow the dataframe to be easily identified from other dataframes after merging. We will be merging this dataframe to the other census dataframe to create a new dataframe with the population demographics we will be adjusting for in our analysis. To help identify which race this dataframe is specific to, we will add a new column, `Race`, with an appropriate factor.
+
+```{r}
+molten.BaltimoreWhitePop$Race <- as.factor("White")
+```
+
+Let us take a quick look at our progress thus far.
+
+```{r}
+head(molten.BaltimoreWhitePop)
+```
+
+If our two dataframes are identically formatted, the data wrangling steps we have made up to this point can be repeated to yield a similar dataframe without error.
+
+```{r}
+colnames(BaltimoreBlackPop) <- as.character(unlist(BaltimoreBlackPop[2,]))
+BaltimoreBlackPop <- BaltimoreBlackPop[-(1:2),]
+Geography <- BaltimoreBlackPop$Geography
+BaltimoreBlackPop <- cbind(Geography,
+        BaltimoreBlackPop[, substr(colnames(BaltimoreBlackPop),1,8)=="Estimate"])
+rownames(BaltimoreBlackPop) <- c()
+colnames(BaltimoreBlackPop) <- str_remove(colnames(BaltimoreBlackPop),"Estimate; ")
+colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), "[[:punct:]]", "")
+colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), " ", "")
+colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), "years", "")
+molten.BaltimoreBlackPop <- melt(BaltimoreBlackPop, id = c("Geography"))
+colnames(molten.BaltimoreBlackPop)[colnames(molten.BaltimoreBlackPop)=="value"] <- "Count"
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Total",]
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Male",]
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Female",]
+molten.BaltimoreBlackPop$AgeGroup <- NA
+molten.BaltimoreBlackPop$Gender <- NA
+molten.BaltimoreBlackPop$variable <- as.character(molten.BaltimoreBlackPop$variable)
+molten.BaltimoreBlackPop$Gender <- ifelse(substr(molten.BaltimoreBlackPop$variable,1,4)=="Male","Male",
+ifelse(substr(molten.BaltimoreBlackPop$variable,1,6)=="Female","Female",NA
+       )
+)
+molten.BaltimoreBlackPop$AgeGroup <- ifelse(substr(molten.BaltimoreBlackPop$variable,1,4)=="Male",str_replace_all(molten.BaltimoreBlackPop$variable,"Male",""),
+                                            ifelse(substr(molten.BaltimoreBlackPop$variable,1,6)=="Female",str_replace_all(molten.BaltimoreBlackPop$variable,"Female",""),NA)
+                                            )
+molten.BaltimoreBlackPop$variable <- NULL
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop %>% select(Geography,Gender,AgeGroup,Count)
+molten.BaltimoreBlackPop$Race <- as.factor("Black")
+head(molten.BaltimoreBlackPop)
+```
+
+As you can see, after repeating the same data wrangling steps, the second dataframe is similarly formatted. 
+
+Let's combine demographic data from the two to create a dataframe from which to base our offset for our regression analysis. We will use `bind_rows` from the `dplyr` package. 
+
+```{r}
+demographics <- bind_rows(molten.BaltimoreWhitePop,molten.BaltimoreBlackPop)
+head(demographics)
+```
+
+Oops! We did some serious wrangling and have not checked our column classes. Let's save some time and apply the `class()` function to all columns of our new dataframe to see whether we inadvertently made some changes along the way that can complicate further wrangling. 
+
+```{r}
+lapply(demographics[,1:length(colnames(demographics))],class)
+```
+
+Although we set our `Race` columns as factors prior to using `bind_rows()`, the `Race`column in the new dataframe is a character class. Furthermore, our `Gender`, `AgeGroup`, and `Count` columns are incorrectly specificed as `character` classes.
+
+We are about to use `dplyr` and `ggplot` for exploratory data analysis. Now would be a good time to fix this. 
+
+```{r}
+demographics[,c("Gender","AgeGroup","Race")] <- lapply(demographics[,c("Gender","AgeGroup","Race")],as.factor)
+
+demographics$Count <- as.numeric(demographics$Count)
+lapply(demographics[,1:length(colnames(demographics))],class)
+```
+
+The `head()` function only returns several of the uppermost rows, meaning that we are not be able to assess what happened to our rows after we used the `bind_rows()` function. We loaded the `dplyr` package for data summarization. If our dataframes were bound and specified correctly, we should be able to accurately recreate summaries of the data. Let's use the `group_by`,`summarise()`, and `mutate()` functions to do just that. In 2017, Baltimore was roughly 30% White and 63% Black (see the [US Census Estimates for Baltimore City](https://factfinder.census.gov/faces/tableservices/jsf/pages/productview.xhtml?pid=ACS_17_5YR_B02001&prodType=table)). If we bound and specified our dataframes correctly, we should be able to generate similar figures.
+
+In 2017, about 93% of Baltimore was either White or Black. Let us use that information and compare it to the [US Census Estimates for Baltimore City](https://factfinder.census.gov/faces/tableservices/jsf/pages/productview.xhtml?pid=ACS_17_5YR_B02001&prodType=table).
+
+```{r}
+TotalPopulationMultiplier <- (100/93)
+demographics %>%
+  group_by(Race) %>% summarise(n = sum(Count)) %>% mutate(Percent = n/(sum(n)*(TotalPopulationMultiplier)))
+```
+
+Our figures are consistent with those by the census. Now that we have confirmed that our rows and dataframes were bound correctly, let's explore the data.
+
+# Exploratory data analysis
 
 
 # Data analysis 
