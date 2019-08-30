@@ -9,49 +9,36 @@ output:
         number_sections: false
 ---
 
-#Must do
-
-+ Finish wrangling census data for white population
-
-+ Copy wrangling for black population
-
-+ Wrangle arrest data
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Motivation 
 
-**Outline**
-
-1.  Freddie Gray
-    + 1.1.  Who was Freddie Gray?
-    + 1.2.  What happened to Freddie Gray? 
-2.  What happened after the death of Freddie Gray?
-    + 2.1.  Baltimore Riots
-    + 2.2.  Mayor Blake requests a DOJ investigation
-4.  DOJ investigation findings
-    + 3.1.  Unconstitutional policing practices.
-    + 3.1.1  Unconstitutional stops
-5.  Consent Decree
-    + 5.1. What is a consent decree? 
-    + 5.2. What was its purpose? 
-6.  What will we be trying to accomplish together? 
-
 Following the death of Freddie Gray on April 12^th^, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge.
 
-*WHAT WAS THE GOAL OF THE CONSENT DECREE?*
+The goal of the consent decree between the City of Baltimore and the DoJ wass to ensure that the Baltimore Police Department resolve the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, the practical impact of the consent decree is still unknown, largely because the scope of its various components and the underlying complexity of each of those components.
 
-For more information on the Baltimore Consent Decree, see this [article](https://www.baltimoresun.com/news/maryland/crime/bs-md-ci-consent-decree-explainer-20180403-story.html) from the Baltimore Sun.
+An excerpt from page 48 of [the DoJ's report](https://www.justice.gov/crt/file/883296/download) highlights the multiple infractions suspected of the Baltimore Police Department: 
+
+<style>
+div.white { background-color:#F5F5F5   ; border-radius: 20px; padding: 20px;}
+</style>
+<div class = "white">
+
+![](DoJ_Excerpt.png)
+
+</div>
+
+**For our analysis, we will focus on determining the extent of arrest disparities, if any, and whether the consent decree had an effect on these disparities.**
 
 # What is the data? 
 
 The analysis uses data from two sources:
 
-+ OpenData
++ [Open Baltimore](https://data.baltimorecity.gov/)
 
-+ American Community Survey
++ [American Community Survey](https://www.census.gov/programs-surveys/acs)
 
 # Data import {#data-import}
 
@@ -79,7 +66,7 @@ library(lubridate)
 We import arrest data, as well as census data by race. These files were downloaded from [American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/guided_search.xhtml) and [Open Baltimore](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
 
 ```{r}
-BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv", header=FALSE)
+BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv", header=TRUE)
 ```
 
 ```{r, eval=FALSE}
@@ -131,6 +118,81 @@ dim(BaltimoreBlackPop)
 Now that we know a little bit about our dataframes, we can begin the process of transforming them for our analysis.
 
 # Data wrangling 
+
+Since three dataframes will be used for this analysis, it is important that we identify the role of each before continuing.
+
+Simply put, we will be analyzing temporal trends in arrests while adjusting for the size of subpopulations. Our final dataframe should therefore have two components:
+
++ 1.0 Arrest data
+    + 1.1 Open Baltimore Arrest Data
++ 2.0 Population data
+    + 2.1 White population data
+    + 2.2 Black population data
+
+For our poisson regression, we need each of these components to be grouped in such a way that would allow them to be combined to make our final dataframe. 
+
+Let us create a quick workflow.
+
+**Workflow**
+
+-----
+
+We'll begin by making each of the three dataframes more practical to use. Then we'll combine the population datasets to make a population dataframe. Lastly, we'll create a final dataframe by grouping the arrest and population dataframes similarly and then combining the two.  
+
+-----
+
+**Making the arrest data more practical**
+
+We'll begin with the arrest data.
+
+![](View()_1.png)
+
+Let us see what variables we are working with. 
+
+```{r}
+colnames(BPD_Arrests_March1)
+```
+
+We can get rid of all the spatial data. Although it could potentially make our analysis more rigourous, it would also make our analysis much more complicated. 
+
+```{r}
+SpatialData <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Longitude","Latitude","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes")
+BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% SpatialData]
+colnames(BPD_Arrests_March1)
+```
+
+We'll only be analyzing the basic characteristics of the arrestee, as well as the date and time in which the arrest was made. We will not consider the nature of the crime, the time of arrest, or arrest number. In doing so, we'll risk creating a small number problem Let us remove that data.
+
+```{r}
+NatureTimeArrest <- c("IncidentOffense","Charge","ChargeDescription","ArrestTime","Arrest")
+BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% NatureTimeArrest]
+colnames(BPD_Arrests_March1)
+```
+
+What type of data are we working with?
+
+```{r}
+lapply(BPD_Arrests_March1[,1:length(colnames(BPD_Arrests_March1))],class)
+```
+
+It looks like our `ArrestDate`  variable is not specified correctly. 
+
+```{r}
+BPD_Arrests_March1$ArrestDate <- as.character(BPD_Arrests_March1$ArrestDate)
+BPD_Arrests_March1$ArrestDate <- as.Date(BPD_Arrests_March1$ArrestDate, "%m/%d/%y", origin="2014-01-01")
+```
+
+Let's look at our dataframe again.
+
+```{r}
+head(BPD_Arrests_March1)
+```
+
+**Making the population data more practical**
+
+We'll begin with the white population data.
+
+![](View()_2.png)
 
 Sometimes imported dataframes follow a rigorous codified format. This is more than often the case with very well maintained data. Codified dataframes often require a corresponding codebook.
 
