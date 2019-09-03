@@ -95,7 +95,7 @@ View(BaltimoreBlackPop)
 
 ![](View()_3.png)
 
-We then look at the dimensions of each dataframe to get a handle on how large or complicated the dataframes are. 
+We then look at the dimensions of each dataframe to get a handle on how large and complicated the dataframes are. 
 
 The dataframe for arrests in Baltimore has `r dim(BPD_Arrests_March1)[1]` rows and `r dim(BPD_Arrests_March1)[2]` columns.
 
@@ -169,17 +169,17 @@ BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% Nat
 colnames(BPD_Arrests_March1)
 ```
 
-What type of data are we working with?
+What type of data are we working with? Rather than use the `class()` function for each individual variable, we can use `lapply()` to apply the `class()` function to all of our columns. `lapply()` and the other functions in the `apply()` family (see ?apply, ?sapply, ?vapply) are great for applying functions across objects. 
 
 ```{r}
 lapply(BPD_Arrests_March1[,1:length(colnames(BPD_Arrests_March1))],class)
 ```
 
-It looks like our `ArrestDate`  variable is not specified correctly. 
+It looks like our `ArrestDate`  variable is not specified correctly. Using `as.Date`, let's make sure R recognizes that the data is in month-day-year format.
 
 ```{r}
 BPD_Arrests_March1$ArrestDate <- as.character(BPD_Arrests_March1$ArrestDate)
-BPD_Arrests_March1$ArrestDate <- as.Date(BPD_Arrests_March1$ArrestDate, "%m/%d/%y", origin="2014-01-01")
+BPD_Arrests_March1$ArrestDate <- as.Date(BPD_Arrests_March1$ArrestDate, "%m/%d/%y")
 ```
 
 Let's look at our dataframe again.
@@ -187,6 +187,8 @@ Let's look at our dataframe again.
 ```{r}
 head(BPD_Arrests_March1)
 ```
+
+We'll group the above dataframe once we know the limitations of our population data. 
 
 **Making the population data more practical**
 
@@ -435,7 +437,87 @@ demographics %>%
   group_by(Race) %>% summarise(n = sum(Count)) %>% mutate(Percent = n/(sum(n)*(TotalPopulationMultiplier)))
 ```
 
-Our figures are consistent with those by the census. Now that we have confirmed that our rows and dataframes were bound correctly, let's explore the data.
+Our figures are consistent with those by the census. 
+
+We need to group the arrest and population data similarly so that we can merge information from both dataframes into a single dataframe for analysis. 
+
+To group our dataframes properly, we need to know the ways they are similar and the ways they are different. 
+
+```{r}
+colnames(demographics)
+colnames(BPD_Arrests_March1)
+```
+
+Our dataframes are similar in the following ways: 
+
++ Both have information by sex or gender. **Insert disclaimer about police department using sex and not gender**
+
++ Both have information by race. 
+
++ Both have information pertaining to age. 
+
+Our dataframes are different in the following ways: 
+
++ Our demographic data defines age by categorical groups and not in discrete values (as in the arrest data). 
+
++ Our demographic data does not have a temporal variable as does the arrest data.
+
++ Our demographic data has information for the Black and White population in Baltimore, whereas our arrest data includes arrests of people of other races. 
+
+Before grouping, we need to limit our analysis to the Black and White population. We also need to define age similarly for both dataframes. We need to do this while preserving the temporal information provided by the arrest data. 
+
+Let us remove rows from the arrest data that are outside the scope of this analysis. 
+
+```{r}
+summary(BPD_Arrests_March1$Race)
+```
+
+```{r}
+BPD_Arrests_March1 <- BPD_Arrests_March1[BPD_Arrests_March1$Race=="B"|BPD_Arrests_March1$Race=="W",]
+BPD_Arrests_March1$Race <- factor(BPD_Arrests_March1$Race, levels = c("B","W"),labels = c("B","W"))
+summary(BPD_Arrests_March1$Race)
+```
+
+Now let's recode the age information provided by the arrest data by the age groups used in the demographic data. 
+
+```{r}
+levels(demographics$AgeGroup)
+demographics <- demographics[demographics$AgeGroup!="Under5",]
+demographics <- demographics[demographics$AgeGroup!="5to9",]
+demographics <- demographics[demographics$AgeGroup!="10to14",]
+demographics <- demographics[demographics$AgeGroup!="15to17",]
+demographics$AgeGroup <- factor(demographics$AgeGroup, levels = c("18and19",
+                                                "20to24",
+                                                "25to29",
+                                                "30to34",
+                                                "35to44",
+                                                "45to54",
+                                                "55to64",
+                                                "65to74",
+                                                "75to84",
+                                                "85andover"),
+                       ordered = TRUE)
+```
+
+```{r}
+BPD_Arrests_March1 <- BPD_Arrests_March1[BPD_Arrests_March1$Age>=18,]
+BPD_Arrests_March1 <- BPD_Arrests_March1[is.na(BPD_Arrests_March1$Age)==FALSE,]
+BPD_Arrests_March1$Age <- cut(BPD_Arrests_March1$Age, breaks=c(17,19,24,29,34,44,54,64,74,84,Inf),labels=levels(demographics$AgeGroup),ordered_result = TRUE, include.lowest = FALSE)
+#Why are there NAs in the above? 
+summary(BPD_Arrests_March1$Age)
+```
+
+Let's change the names of the `Age` and `Sex` variables.
+
+```{r}
+colnames(BPD_Arrests_March1)[colnames(BPD_Arrests_March1)=="Age"] <- c("AgeGroup")
+colnames(BPD_Arrests_March1)[colnames(BPD_Arrests_March1)=="Sex"] <- c("Gender")
+colnames(BPD_Arrests_March1)
+```
+
+Now we can group the data.
+
+Let's explore the data! 
 
 # Exploratory data analysis
 
