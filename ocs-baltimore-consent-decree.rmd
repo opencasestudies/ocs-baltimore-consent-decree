@@ -13,7 +13,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Issues
+# Issues
 
 + Some code chunks contain horizontal scroll bars. How should we address this? 
 
@@ -22,6 +22,17 @@ knitr::opts_chunk$set(echo = TRUE)
 + grid.arrange plots appear grainy (574-643)
 
 + Historical plot (646-660) needs to be more elegant. 
+
++ Should the analysis dataframe be appended as our analysis continues or should it be finalized in preparating for our analysis?
+
++ Multicollinearity, categorical variable
+++ Need to creat Consent Decree variable
+
+# Perspectives
+
++ libraries should be updated as the analysis moves along
+
++ An update of a library should also include a description of a package so that students can recall those packages at a later date. 
 
 # Motivation 
 
@@ -52,7 +63,7 @@ The analysis uses data from two sources:
 
 # Data import {#data-import}
 
-Before we import the data, let us think about the project. At the heart of our analysis is poisson regression involving time, meaning we'll need to check our statistical assumptions down the line and account for possible temporal trends. We'll also be modifying, but not altering, the data substantially for this analysis since the data we downloaded does not come in a form that is ready to analyze---this process is called *data wrangling*. Lastly, we'll be making visualizations to help us identify what would otherwise be complicated patterns in the data. It would help to have forge multiple visualizations into one. 
+Before we import the data, let us think about the project. At the heart of our analysis is poisson regression involving time, meaning we'll need to check our statistical assumptions down the line and acPopulation for possible temporal trends. We'll also be modifying, but not altering, the data substantially for this analysis since the data we downloaded does not come in a form that is ready to analyze---this process is called *data wrangling*. Lastly, we'll be making visualizations to help us identify what would otherwise be complicated patterns in the data. It would help to have forge multiple visualizations into one. 
 
 A few packages immediately come to mind: 
 
@@ -62,7 +73,7 @@ A few packages immediately come to mind:
 
 + `lubridate`, for converting time data into a form that can be used
 
-We'll load other packages as we encounter roadblocks. For now, we'll load these packages, as it is very that likely we'll use them.
+We'll load other packages as we enPopulationer roadblocks. For now, we'll load these packages, as it is very that likely we'll use them.
 
 ```{r, warning=FALSE, message=FALSE}
 library(dplyr)
@@ -298,7 +309,7 @@ colnames(BaltimoreWhitePop)
 
 We need to organize our dataframe to have a single column for age group and a single column gender. This data format is known as *long format* and is required to efficiently create data visualizations with the `ggplot` package. Doing this will also allow us to use more appropriate variables such as age group and gender as well as the specific age group-gender combinations the dataframe currently provides. 
 
-Our dataframe is still a bit messy. It is currently in wide format has two variables of interest in nearly every column. We need to get our dataframe into long format and remove the variable pairings. To do this we will have to collapse the count data gathered across columns into a single column current combinations and use this column to create a dataframe with age group and gender columns.
+Our dataframe is still a bit messy. It is currently in wide format has two variables of interest in nearly every column. We need to get our dataframe into long format and remove the variable pairings. To do this we will have to collapse the Population data gathered across columns into a single column current combinations and use this column to create a dataframe with age group and gender columns.
 
 We'll use the `melt()` function from the `reshape2` package to reorganize the data into long format. 
 
@@ -311,10 +322,10 @@ molten.BaltimoreWhitePop <- melt(BaltimoreWhitePop, id = c("Geography"))
 head(molten.BaltimoreWhitePop)
 ```
 
-We'll rename the `value` column name to `Count`
+We'll rename the `value` column name to `Population`
 
 ```{r}
-colnames(molten.BaltimoreWhitePop)[colnames(molten.BaltimoreWhitePop)=="value"] <- "Count"
+colnames(molten.BaltimoreWhitePop)[colnames(molten.BaltimoreWhitePop)=="value"] <- "Population"
 head(molten.BaltimoreWhitePop)
 ```
 
@@ -356,10 +367,10 @@ We can get rid of extraneous fields now that we have the fields we need.
 molten.BaltimoreWhitePop$variable <- NULL
 ```
 
-Our `count` variable should be last in our dataframe. `dplyr` could be helpful for this purpose. Let's select/subset the entire dataframe and conveniently reorder our columns. Notice that quotation marks are not necessary after piping with `dplyr`.
+Our `Population` variable should be last in our dataframe. `dplyr` could be helpful for this purpose. Let's select/subset the entire dataframe and conveniently reorder our columns. Notice that quotation marks are not necessary after piping with `dplyr`.
 
 ```{r}
-molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop %>% select(Geography,Gender,AgeGroup,Count)
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop %>% select(Geography,Gender,AgeGroup,Population)
 head(molten.BaltimoreWhitePop)
 ```
 
@@ -389,7 +400,7 @@ colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), "[[:
 colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), " ", "")
 colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), "years", "")
 molten.BaltimoreBlackPop <- melt(BaltimoreBlackPop, id = c("Geography"))
-colnames(molten.BaltimoreBlackPop)[colnames(molten.BaltimoreBlackPop)=="value"] <- "Count"
+colnames(molten.BaltimoreBlackPop)[colnames(molten.BaltimoreBlackPop)=="value"] <- "Population"
 molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Total",]
 molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Male",]
 molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Female",]
@@ -404,7 +415,7 @@ molten.BaltimoreBlackPop$AgeGroup <- ifelse(substr(molten.BaltimoreBlackPop$vari
                                             ifelse(substr(molten.BaltimoreBlackPop$variable,1,6)=="Female",str_replace_all(molten.BaltimoreBlackPop$variable,"Female",""),NA)
                                             )
 molten.BaltimoreBlackPop$variable <- NULL
-molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop %>% select(Geography,Gender,AgeGroup,Count)
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop %>% select(Geography,Gender,AgeGroup,Population)
 molten.BaltimoreBlackPop$Race <- as.factor("Black")
 head(molten.BaltimoreBlackPop)
 ```
@@ -424,14 +435,14 @@ Oops! We did some serious wrangling and have not checked our column classes. Let
 lapply(demographics[,1:length(colnames(demographics))],class)
 ```
 
-Although we set our `Race` columns as factors prior to using `bind_rows()`, the `Race`column in the new dataframe is a character class. Furthermore, our `Gender`, `AgeGroup`, and `Count` columns are incorrectly specificed as `character` classes.
+Although we set our `Race` columns as factors prior to using `bind_rows()`, the `Race`column in the new dataframe is a character class. Furthermore, our `Gender`, `AgeGroup`, and `Population` columns are incorrectly specificed as `character` classes.
 
 We are about to use `dplyr` and `ggplot` for exploratory data analysis. Now would be a good time to fix this. 
 
 ```{r}
 demographics[,c("Gender","AgeGroup","Race")] <- lapply(demographics[,c("Gender","AgeGroup","Race")],as.factor)
 
-demographics$Count <- as.numeric(demographics$Count)
+demographics$Population <- as.numeric(demographics$Population)
 lapply(demographics[,1:length(colnames(demographics))],class)
 ```
 
@@ -442,7 +453,7 @@ In 2017, about 93% of Baltimore was either White or Black. Let us use that infor
 ```{r}
 TotalPopulationMultiplier <- (100/93)
 demographics %>%
-  group_by(Race) %>% summarise(n = sum(Count)) %>% mutate(Percent = n/(sum(n)*(TotalPopulationMultiplier)))
+  group_by(Race) %>% summarise(n = sum(Population)) %>% mutate(Percent = n/(sum(n)*(TotalPopulationMultiplier)))
 ```
 
 Our figures are consistent with those by the census. 
@@ -543,15 +554,18 @@ Now we can group and combine the data.
 
 ```{r}
 ArrestData <- BPD_Arrests_March1 %>% group_by_all() %>% summarise(Arrests=n())
-DemographicData <- demographics %>% group_by_at(vars(Gender,AgeGroup,Race,Count))
+DemographicData <- demographics %>% group_by_at(vars(Gender,AgeGroup,Race,Population))
 AnalysisDF <- merge(ArrestData, DemographicData, by=c("Gender","AgeGroup","Race"))
+AnalysisDF$Month <- month(AnalysisDF$ArrestDate)
+AnalysisDF$Year <- year(AnalysisDF$ArrestDate)
+head(AnalysisDF)
 ```
 
 Let's explore the data! 
 
 # Exploratory data analysis
 
-Let us look at the overall arrest count over time.
+Let us look at the overall arrest Population over time.
 
 ```{r, message=FALSE}
 ggplot(AnalysisDF,aes(x=ArrestDate, y=Arrests))+
@@ -642,8 +656,11 @@ grid.arrange(month2014_15,
              month2017_18, nrow=2, ncol=2, top="Plot 3")
 ```
 
-In the plot generated above, a yearly trend isn't as clear. It appears that the cyclical trend we initially saw may occur only from 2016-2018. 
-Let's see if any related events coincided with changes in arrests. 
+In the plot generated above, a yearly trend isn't as clear. It appears that the cyclical trend we initially saw may occur only from 2016-2018.
+
+There is a decreasing trend in arrests over the years, but exception to this trend can be found in smaller time periods. We will need to acPopulation for this variation in our model.
+
+Let's see if any related historical events coincided with changes in arrests. 
 
 ```{r}
 ggplot(BPD_Arrests_March1) + aes(x = floor_date(ArrestDate, "month")) +
@@ -661,7 +678,15 @@ labs(color='Notable Events')+
   theme(legend.position = "bottom", legend.direction = "vertical")
 ```
 
+The deaths of Michael Brown and Freddie Gray both appear to immediately precede sharp declines in the number of arrests. The DoJ's announcement of its findings of its investigation also precedes a decline in the number of arrests. 
+
 # Data analysis 
+
+MODELA1 <- glm(Arrests ~ Gender + Race + AgeGroup + Month*Year + ConsentDecree, data=AnalysisDF, family=poisson, offset(log(Population)))
+
+MODELB1 <- glm(arrestPopulation ~ Sex + AgeGroup + ArrestDateMonth*LongTermTrendIndicatorYear + ConsentDecree*Black, data=Z, family=poisson, offset(log(AtRisk)))
+MODELC1 <- glm(arrestPopulation ~ Sex + Black + AgeGroup + ArrestTimeGroup + ArrestDateMonth*LongTermTrendIndicatorYear + ConsentDecree, data=Z, family=poisson, offset(log(AtRisk)))
+MODELD1 <- glm(arrestPopulation ~ Sex + AgeGroup + ArrestTimeGroup + ArrestDateMonth*LongTermTrendIndicatorYear + ConsentDecree*Black, data=Z, family=poisson, offset(log(AtRisk)))
 
 # Summary of results
 
