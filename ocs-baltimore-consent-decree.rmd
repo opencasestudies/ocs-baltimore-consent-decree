@@ -13,6 +13,16 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+#Issues
+
++ Some code chunks contain horizontal scroll bars. How should we address this? 
+
++ Warning is appearing for some code. Why? How should we address this? 
+
++ grid.arrange plots appear grainy (574-643)
+
++ Historical plot (646-660) needs to be more elegant. 
+
 # Motivation 
 
 Following the death of Freddie Gray on April 12^th^, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge.
@@ -49,8 +59,6 @@ A few packages immediately come to mind:
 + `dplyr`, for data wranging and summarization
 
 + `ggplot2`, for beautiful visualizations with ready data
-
-+ `gridExtra`, for creating visually-appealing plots of plots
 
 + `lubridate`, for converting time data into a form that can be used
 
@@ -472,9 +480,11 @@ Let us remove rows from the arrest data that are outside the scope of this analy
 summary(BPD_Arrests_March1$Race)
 ```
 
+Let us ensure also that our labels are clear.
+
 ```{r}
 BPD_Arrests_March1 <- BPD_Arrests_March1[BPD_Arrests_March1$Race=="B"|BPD_Arrests_March1$Race=="W",]
-BPD_Arrests_March1$Race <- factor(BPD_Arrests_March1$Race, levels = c("B","W"),labels = c("B","W"))
+BPD_Arrests_March1$Race <- factor(BPD_Arrests_March1$Race, levels = c("B","W"),labels = c("Black","White"))
 summary(BPD_Arrests_March1$Race)
 ```
 
@@ -497,13 +507,27 @@ demographics$AgeGroup <- factor(demographics$AgeGroup, levels = c("18and19",
                                                 "75to84",
                                                 "85andover"),
                        ordered = TRUE)
+lapply(demographics, levels)
+```
+
+How do our levels compare?
+
+```{r}
+lapply(BPD_Arrests_March1, levels)
+```
+
+It looks like the `Sex` variable levels in the arrest data are inconsistent with the `Gender` variable levels in our demographic data.
+
+It's important that data be as clear as possible. Let us recode the `Sex` variable in the arrest to accomplish this. 
+
+```{r}
+BPD_Arrests_March1$Sex <- factor(BPD_Arrests_March1$Sex, levels = c("F","M"), labels = c("Female", "Male"))
 ```
 
 ```{r}
 BPD_Arrests_March1 <- BPD_Arrests_March1[BPD_Arrests_March1$Age>=18,]
 BPD_Arrests_March1 <- BPD_Arrests_March1[is.na(BPD_Arrests_March1$Age)==FALSE,]
 BPD_Arrests_March1$Age <- cut(BPD_Arrests_March1$Age, breaks=c(17,19,24,29,34,44,54,64,74,84,Inf),labels=levels(demographics$AgeGroup),ordered_result = TRUE, include.lowest = FALSE)
-#Why are there NAs in the above? 
 summary(BPD_Arrests_March1$Age)
 ```
 
@@ -515,12 +539,127 @@ colnames(BPD_Arrests_March1)[colnames(BPD_Arrests_March1)=="Sex"] <- c("Gender")
 colnames(BPD_Arrests_March1)
 ```
 
-Now we can group the data.
+Now we can group and combine the data.
+
+```{r}
+ArrestData <- BPD_Arrests_March1 %>% group_by_all() %>% summarise(Arrests=n())
+DemographicData <- demographics %>% group_by_at(vars(Gender,AgeGroup,Race,Count))
+AnalysisDF <- merge(ArrestData, DemographicData, by=c("Gender","AgeGroup","Race"))
+```
 
 Let's explore the data! 
 
 # Exploratory data analysis
 
+Let us look at the overall arrest count over time.
+
+```{r, message=FALSE}
+ggplot(AnalysisDF,aes(x=ArrestDate, y=Arrests))+
+  geom_point(size=0.6, alpha=0.2)
+```
+
+Our data is currently grouped by date in `%m/%d/%y` format. For visualization purposes, this may offer too high of a resolution to see any patterns that may exist. 
+
+We can use `geom_smooth` to help resolve our resolution problem. 
+
+```{r, message=FALSE}
+ggplot(AnalysisDF,aes(x=ArrestDate, y=Arrests))+
+  geom_smooth()
+```
+
+`geom_smooth` can often oversmooth our data, meaning we won't be able to see any small scale variation that could be relevant for our analysis. 
+
+We can resolve this issue by manually changing the resolution of our temporal data with `lubridate` and using a `geom_bar` layer to visualize our data for a given unit. 
+
+```{r}
+week <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"week"), y=Arrests))+
+  geom_bar(stat="identity", color="red")
+```
+
+```{r}
+month <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
+  geom_bar(stat="identity", color="blue")
+```
+
+```{r}
+quarter <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"quarter"), y=Arrests))+
+  geom_bar(stat="identity", color="green")
+```
+
+```{r}
+year <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"year"), y=Arrests))+
+  geom_bar(stat="identity", color="orange")
+```
+
+We can use `gridExtra` to place all these plots in a single plot. This makes comparisons a bit easier. 
+
+```{r}
+library(gridExtra)
+
+grid.arrange(week,month,quarter,year,nrow=2,ncol=2, top=" Plot")
+```
+
+It looks like in the upper and leftmost plots there is some cyclical trend. Let us zoom in and find out what this may be.
+
+```{r}
+week2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"week"), y=Arrests))+
+  geom_bar(stat="identity", color="red")
+```
+
+```{r}
+month2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
+  geom_bar(stat="identity", color="blue")
+```
+
+```{r}
+quarter2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"quarter"), y=Arrests))+
+  geom_bar(stat="identity", color="green")
+```
+
+```{r}
+year2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"year"), y=Arrests))+
+  geom_bar(stat="identity", color="orange")
+```
+
+```{r}
+grid.arrange(week2,month2,quarter2,year2,top="Plot 2")
+```
+
+It looks like there may be a yearly trend. Grouping our data with lubridate by month seems to be the best way to visualize this. Let's do a year by year check with `gridExtra`.
+
+```{r}
+month2014_15 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2014:2015,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
+  geom_bar(stat="identity", color="red")
+month2015_16 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2015:2016,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
+  geom_bar(stat="identity", color="blue")
+month2016_17 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2017,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
+  geom_bar(stat="identity", color="green")
+month2017_18 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2017:2018,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
+  geom_bar(stat="identity", color="orange")
+grid.arrange(month2014_15,
+             month2015_16,
+             month2016_17,
+             month2017_18, nrow=2, ncol=2, top="Plot 3")
+```
+
+In the plot generated above, a yearly trend isn't as clear. It appears that the cyclical trend we initially saw may occur only from 2016-2018. 
+Let's see if any related events coincided with changes in arrests. 
+
+```{r}
+ggplot(BPD_Arrests_March1) + aes(x = floor_date(ArrestDate, "month")) +
+  geom_bar(stat="count", colour="black", fill="black") +
+  xlab('')+
+  ylab('Arrests')+
+  geom_vline(aes(xintercept=as.Date("2014-08-09"),color="1_Death of Michael Brown"), linetype="solid",size=1)+
+  geom_vline(aes(xintercept=as.Date("2015-04-12"),color="2_Death of Freddie Gray"), linetype="solid",size=1)+ 
+  geom_vline(aes(xintercept=as.Date("2015-05-06"),color="3_DoJ Investigation Requested by Major Blake"), linetype="solid",size=1) +
+  geom_vline(aes(xintercept=as.Date("2016-08-10"),color="4_DoJ Announces Findings of Investigation"), linetype="solid",size=1) +
+  geom_vline(aes(xintercept=as.Date("2017-04-07"),color="5_Consent Decree Approved"), linetype="solid",size=1)+
+  scale_color_manual(name="Event",values=c("red","green","blue","orange","purple"),labels=c("Death of Michael Brown","Death of Freddie Gray","DoJ Investigation Requested by Major Blake","DoJ Announces Findings of Investigation","Consent Decree Approved"))+ 
+  ggtitle("Arrests per Month in Baltimore")+
+labs(color='Notable Events')+
+  theme(legend.position = "bottom", legend.direction = "vertical")
+```
 
 # Data analysis 
 
