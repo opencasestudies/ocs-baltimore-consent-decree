@@ -17,16 +17,20 @@ knitr::opts_chunk$set(echo = TRUE)
 
 + Some code chunks contain horizontal scroll bars. How should we address this? 
 
-+ Warning is appearing for some code. Why? How should we address this? 
-
-+ grid.arrange plots appear grainy (574-643)
++ Warning is appearing for some code. Why? How should we address this?
 
 + Historical plot (646-660) needs to be more elegant. 
 
 + Should the analysis dataframe be appended as our analysis continues or should it be finalized in preparating for our analysis?
 
 + Multicollinearity, categorical variable
-++ Need to creat Consent Decree variable
+++ Need to create Consent Decree variable
+
+CONSIDER ggarange cowplot
+
+Ask about spatial analysis
+
+DF %>% filter(Year %>% 2014.2016) %>% ggplot(___,___)+
 
 # Perspectives
 
@@ -565,120 +569,75 @@ Let's explore the data!
 
 # Exploratory data analysis
 
-Let us look at the overall arrest Population over time.
+Let's see if any related historical events coincided with changes in arrests.
 
-```{r, message=FALSE}
-ggplot(AnalysisDF,aes(x=ArrestDate, y=Arrests))+
-  geom_point(size=0.6, alpha=0.2)
-```
+Our data is currently grouped by date in `%m/%d/%y` format. Given the number of arrests in our dataset, it's likely that these arrests cover most if not all days in between 2014 and 2018. For visualization purposes, this may offer too high of a resolution to see any patterns that may exist. 
 
-Our data is currently grouped by date in `%m/%d/%y` format. For visualization purposes, this may offer too high of a resolution to see any patterns that may exist. 
+**Visit this [stackoverflow](https://stackoverflow.com/questions/18091721/align-geom-text-to-a-geom-vline-in-ggplot2) document to learn how to implement this more elegantly**
 
-We can use `geom_smooth` to help resolve our resolution problem. 
-
-```{r, message=FALSE}
-ggplot(AnalysisDF,aes(x=ArrestDate, y=Arrests))+
-  geom_smooth()
-```
-
-`geom_smooth` can often oversmooth our data, meaning we won't be able to see any small scale variation that could be relevant for our analysis. 
-
-We can resolve this issue by manually changing the resolution of our temporal data with `lubridate` and using a `geom_bar` layer to visualize our data for a given unit. 
+**alpha does not work on geom_point**
 
 ```{r}
-week <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"week"), y=Arrests))+
-  geom_bar(stat="identity", color="red")
+AnalysisDF %>% group_by(week=floor_date(ArrestDate,"week")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x = week, y=n))+
+  geom_point()+
+  geom_smooth(color="red")+
+  xlab('')+
+  ylab('Arrests')+
+  geom_vline(aes(xintercept=as.Date("2014-08-09"),color="1_Death of Michael Brown"), linetype="solid",size=3)+
+  geom_vline(aes(xintercept=as.Date("2015-04-12"),color="2_Death of Freddie Gray"), linetype="solid",size=3)+ 
+  geom_vline(aes(xintercept=as.Date("2015-05-06"),color="3_DoJ Investigation Requested by Major Blake"), linetype="solid",size=3) +
+  geom_vline(aes(xintercept=as.Date("2016-08-10"),color="4_DoJ Announces Findings of Investigation"), linetype="solid",size=3) +
+  geom_vline(aes(xintercept=as.Date("2017-04-07"),color="5_Consent Decree Approved"), linetype="solid",size=3)+
+  scale_color_manual(name="Event",values=c("red","green","blue","orange","purple"),labels=c("Death of Michael Brown","Death of Freddie Gray","DoJ Investigation Requested by Major Blake","DoJ Announces Findings of Investigation","Consent Decree Approved"))+
+  ggtitle("Arrests/Week in Baltimore")+
+  theme(legend.position = "bottom", legend.direction = "vertical")
 ```
 
-```{r}
-month <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
-  geom_bar(stat="identity", color="blue")
-```
+The deaths of Michael Brown and Freddie Gray both appear to immediately precede sharp declines in the number of arrests. The DoJ's announcement of its findings of its investigation also precedes a decline in the number of arrests. 
 
-```{r}
-quarter <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"quarter"), y=Arrests))+
-  geom_bar(stat="identity", color="green")
-```
-
-```{r}
-year <- ggplot(AnalysisDF,aes(x=floor_date(ArrestDate,"year"), y=Arrests))+
-  geom_bar(stat="identity", color="orange")
-```
+`geom_smooth` can often oversmooth our data, reducing its variance, meaning we may not be able to see any small scale variation that could be relevant for our analysis. 
 
 We can use `gridExtra` to place all these plots in a single plot. This makes comparisons a bit easier. 
 
 ```{r}
 library(gridExtra)
-
-grid.arrange(week,month,quarter,year,nrow=2,ncol=2, top=" Plot")
 ```
 
-It looks like in the upper and leftmost plots there is some cyclical trend. Let us zoom in and find out what this may be.
+2019 has incomplete data, let's exclude it for now. 
 
 ```{r}
-week2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"week"), y=Arrests))+
-  geom_bar(stat="identity", color="red")
+day2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(day=floor_date(ArrestDate,"day")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=day, y=n))+
+  geom_line(color="red")
 ```
 
 ```{r}
-month2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
-  geom_bar(stat="identity", color="blue")
+week2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(week=floor_date(ArrestDate,"week")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=week, y=n))+
+  geom_line(color="purple")
 ```
 
 ```{r}
-quarter2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"quarter"), y=Arrests))+
-  geom_bar(stat="identity", color="green")
+month2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(month=floor_date(ArrestDate,"month")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=month, y=n))+
+  geom_line(color="green")
 ```
 
 ```{r}
-year2 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2018,],aes(x=floor_date(ArrestDate,"year"), y=Arrests))+
-  geom_bar(stat="identity", color="orange")
+season2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(season=floor_date(ArrestDate,"season")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=season, y=n))+
+  geom_line(color="blue")
 ```
 
 ```{r}
-grid.arrange(week2,month2,quarter2,year2,top="Plot 2")
+quarter2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(quarter=floor_date(ArrestDate,"quarter")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=quarter, y=n))+
+  geom_line(color="pink")
 ```
-
-It looks like there may be a yearly trend. Grouping our data with lubridate by month seems to be the best way to visualize this. Let's do a year by year check with `gridExtra`.
 
 ```{r}
-month2014_15 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2014:2015,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
-  geom_bar(stat="identity", color="red")
-month2015_16 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2015:2016,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
-  geom_bar(stat="identity", color="blue")
-month2016_17 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2016:2017,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
-  geom_bar(stat="identity", color="green")
-month2017_18 <- ggplot(AnalysisDF[year(AnalysisDF$ArrestDate)==2017:2018,],aes(x=floor_date(ArrestDate,"month"), y=Arrests))+
-  geom_bar(stat="identity", color="orange")
-grid.arrange(month2014_15,
-             month2015_16,
-             month2016_17,
-             month2017_18, nrow=2, ncol=2, top="Plot 3")
+year2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(year=floor_date(ArrestDate,"year")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=year, y=n))+
+  geom_line(color="orange")
 ```
-
-In the plot generated above, a yearly trend isn't as clear. It appears that the cyclical trend we initially saw may occur only from 2016-2018.
-
-There is a decreasing trend in arrests over the years, but exception to this trend can be found in smaller time periods. We will need to acPopulation for this variation in our model.
-
-Let's see if any related historical events coincided with changes in arrests. 
 
 ```{r}
-ggplot(BPD_Arrests_March1) + aes(x = floor_date(ArrestDate, "month")) +
-  geom_bar(stat="count", colour="black", fill="black") +
-  xlab('')+
-  ylab('Arrests')+
-  geom_vline(aes(xintercept=as.Date("2014-08-09"),color="1_Death of Michael Brown"), linetype="solid",size=1)+
-  geom_vline(aes(xintercept=as.Date("2015-04-12"),color="2_Death of Freddie Gray"), linetype="solid",size=1)+ 
-  geom_vline(aes(xintercept=as.Date("2015-05-06"),color="3_DoJ Investigation Requested by Major Blake"), linetype="solid",size=1) +
-  geom_vline(aes(xintercept=as.Date("2016-08-10"),color="4_DoJ Announces Findings of Investigation"), linetype="solid",size=1) +
-  geom_vline(aes(xintercept=as.Date("2017-04-07"),color="5_Consent Decree Approved"), linetype="solid",size=1)+
-  scale_color_manual(name="Event",values=c("red","green","blue","orange","purple"),labels=c("Death of Michael Brown","Death of Freddie Gray","DoJ Investigation Requested by Major Blake","DoJ Announces Findings of Investigation","Consent Decree Approved"))+ 
-  ggtitle("Arrests per Month in Baltimore")+
-labs(color='Notable Events')+
-  theme(legend.position = "bottom", legend.direction = "vertical")
+grid.arrange(day2,week2,month2,season2,quarter2,year2,nrow=3,ncol=2,top="Plot 2")
 ```
-
-The deaths of Michael Brown and Freddie Gray both appear to immediately precede sharp declines in the number of arrests. The DoJ's announcement of its findings of its investigation also precedes a decline in the number of arrests. 
 
 # Data analysis 
 
