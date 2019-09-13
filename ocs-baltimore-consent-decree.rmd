@@ -15,34 +15,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Issues
 
-+ Some code chunks contain horizontal scroll bars. How should we address this? 
++ Some code chunks contain horizontal scroll bars. How can we improve the code output for readability? 
 
 + Warning is appearing for some code. Why? How should we address this?
 
 + Historical plot (646-660) needs to be more elegant. 
-
-+ Should the analysis dataframe be appended as our analysis continues or should it be finalized in preparating for our analysis?
-
-+ Multicollinearity, categorical variable
-++ Need to create Consent Decree variable
-
-CONSIDER ggarange cowplot
-
-Ask about spatial analysis
-
-DF %>% filter(Year %>% 2014.2016) %>% ggplot(___,___)+
-
-# Perspectives
-
-+ libraries should be updated as the analysis moves along
-
-+ An update of a library should also include a description of a package so that students can recall those packages at a later date. 
+    + Should we include this in the case study? 
++ Should the analysis dataframe be appended as our analysis continues or should it be finalized in preparing for our analysis?
 
 # Motivation 
 
 Following the death of Freddie Gray on April 12^th^, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge.
 
-The goal of the consent decree between the City of Baltimore and the DoJ wass to ensure that the Baltimore Police Department resolve the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, the practical impact of the consent decree is still unknown, largely because the scope of its various components and the underlying complexity of each of those components.
+The goal of the consent decree between the City of Baltimore and the DoJ is to ensure that the Baltimore Police Department resolve the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, the practical impact of the consent decree is still unknown, largely because the scope of its various components and the underlying complexity of each of those components.
 
 An excerpt from page 48 of [the DoJ's report](https://www.justice.gov/crt/file/883296/download) highlights the multiple infractions suspected of the Baltimore Police Department: 
 
@@ -55,7 +40,7 @@ div.white { background-color:#F5F5F5   ; border-radius: 20px; padding: 20px;}
 
 </div>
 
-**For our analysis, we will focus on determining the extent of arrest disparities, if any, and whether the consent decree had an effect on these disparities.**
+**For our analysis, we will focus on determining the extent of arrest disparities, if any, and whether the consent decree had an effect on these disparities.** *Correct this: this analysis is more about assessing whether the consent decree had an effect*
 
 # What is the data? 
 
@@ -71,7 +56,7 @@ Before we import the data, let us think about the project. At the heart of our a
 
 A few packages immediately come to mind: 
 
-+ `dplyr`, for data wranging and summarization
++ `tidyverse`, for data wranging and summarization, amongst other things, from a number of packages
 
 + `ggplot2`, for beautiful visualizations with ready data
 
@@ -80,10 +65,11 @@ A few packages immediately come to mind:
 We'll load other packages as we enPopulationer roadblocks. For now, we'll load these packages, as it is very that likely we'll use them.
 
 ```{r, warning=FALSE, message=FALSE}
-library(dplyr)
+library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 library(lubridate)
+library(stringr)
 ```
 
 We import arrest data, as well as census data by race. These files were downloaded from [American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/guided_search.xhtml) and [Open Baltimore](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
@@ -160,7 +146,7 @@ Let us create a quick workflow.
 
 -----
 
-We'll begin by making each of the three dataframes more practical to use. Then we'll combine the population datasets to make a population dataframe. Lastly, we'll create a final dataframe by grouping the arrest and population dataframes similarly and then combining the two.  
+We'll begin by making each of the three dataframes more practical to use. Then we'll combine the population datasets to make a population dataframe. Lastly, we'll create a final dataframe by grouping the arrest and population dataframes similarly and then combine the two.  
 
 -----
 
@@ -176,11 +162,11 @@ Let us see what variables we are working with.
 colnames(BPD_Arrests_March1)
 ```
 
-We can get rid of all the spatial data. Although it could potentially make our analysis more rigourous, it would also make our analysis much more complicated. 
+We can get rid of the spatial data.
 
 ```{r}
-SpatialData <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Longitude","Latitude","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes")
-BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% SpatialData]
+SpatialData_no_coordinates <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes","Longitude","Latitude")
+BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% SpatialData_no_coordinates]
 colnames(BPD_Arrests_March1)
 ```
 
@@ -198,7 +184,9 @@ What type of data are we working with? Rather than use the `class()` function fo
 lapply(BPD_Arrests_March1[,1:length(colnames(BPD_Arrests_March1))],class)
 ```
 
-It looks like our `ArrestDate`  variable is not specified correctly. Using `as.Date`, let's make sure R recognizes that the data is in month-day-year format.
+It looks like our `ArrestDate` and coordinate (`Latitude` & `Longitude`) variables are not specified correctly.
+
+Using `as.Date`, let's make sure R recognizes that the data is in month-day-year format.
 
 ```{r}
 BPD_Arrests_March1$ArrestDate <- as.character(BPD_Arrests_March1$ArrestDate)
@@ -211,7 +199,7 @@ Let's look at our dataframe again.
 head(BPD_Arrests_March1)
 ```
 
-We'll group the above dataframe once we know the limitations of our population data. 
+We'll group this final dataframe once we know the limitations of our population data. 
 
 **Making the population data more practical**
 
@@ -236,7 +224,7 @@ colnames(BaltimoreWhitePop) <- as.character(BaltimoreWhitePop[2,])
 colnames(BaltimoreWhitePop[,1:5])
 ```
 
-Our colnames are now a set of numbers. This is because *EXPLANATION*. *EXPLAIN WHY USING THESE COLNAMES WOULD BE A TERRIBLE IDEA*
+Our colnames are now a set of numbers. This is because *EXPLANATION*. *EXPLAIN WHY USING THESE COLNAMES WOULD BE A TERRIBLE IDEA* **ALSO: why are the colnames numbers to begin with?**
 
 We cannot take an object that is a non-matrix-like object and the `colnames()` functions together. `colnames()` only recognizes matrix-like objects (see `?colnames()`.
 
@@ -265,7 +253,9 @@ For efficiency, we should discard any data that will not be used in our analysis
 
 Instead, we will use `substr` to take our character class field names and identify the fields we will need. 
 
-`substr` searches for a distinct character string within a portion of the characters in a string. Below, we search for `Estimate` within the 1^st^ through 8^th^ characters in each field name and then save the columns that meet that criteria. We also save and rename the `Geography` column as good practice. Rownames are removed to avoid later confusion. 
+This takes advantage of a programming concept known as [regular expressions](https://en.wikipedia.org/wiki/Regular_expression?oldformat=true). Simply put, a sequence of text in the data. 
+
+`substr` searches for a distinct character string, a regular expressions, within a portion of the characters in a string. Below, we search for `Estimate` within the 1^st^ through 8^th^ characters in each field name and then save the columns that meet that criteria. We also save and rename the `Geography` column as good practice. Rownames are removed to avoid later confusion. 
 
 ```{r}
 Geography <- BaltimoreWhitePop$Geography
@@ -284,10 +274,6 @@ colnames(BaltimoreWhitePop)
 `"Estimate; "` is in nearly every column name in our new dataframe. Let's remove it to have an even more practical dataframe. To do this, we will use `str_remove` from the `stringr` package.
 
 ```{r}
-library(stringr)
-```
-
-```{r}
 colnames(BaltimoreWhitePop) <- str_remove(colnames(BaltimoreWhitePop),"Estimate; ")
 ```
 
@@ -297,7 +283,7 @@ Our new column names are much simpler.
 colnames(BaltimoreWhitePop)
 ```
 
-Let's remove symbols, spaces, and `years` from our field names. The expression `[[:punct:]]` encompasses a wide range of symbols. `str_replace_all` differs from `str_replace` in that it is used to replace patterns for the entire string.
+Let's remove symbols, spaces, and `years` from our field names. The expression `[[:punct:]]` encompasses a wide range of symbols. `str_replace_all` differs from `str_replace` in that it is used to replace patterns for the entire string. A number of resources exist online showing the ways we can use regular expressions (click [here](http://web.mit.edu/hackl/www/lab/turkshop/slides/regex-cheatsheet.pdf) to see this great MIT resource).
 
 ```{r}
 colnames(BaltimoreWhitePop) <- str_replace_all(colnames(BaltimoreWhitePop), "[[:punct:]]", "")
@@ -315,30 +301,21 @@ We need to organize our dataframe to have a single column for age group and a si
 
 Our dataframe is still a bit messy. It is currently in wide format has two variables of interest in nearly every column. We need to get our dataframe into long format and remove the variable pairings. To do this we will have to collapse the Population data gathered across columns into a single column current combinations and use this column to create a dataframe with age group and gender columns.
 
-We'll use the `melt()` function from the `reshape2` package to reorganize the data into long format. 
+**We'll use the `melt()` function from the `reshape2` package to reorganize the data into long format. DELETE THIS**
 
 *WHY THE WARNING?*
 
 ```{r}
-library(reshape2)
-
-molten.BaltimoreWhitePop <- melt(BaltimoreWhitePop, id = c("Geography"))
-head(molten.BaltimoreWhitePop)
-```
-
-We'll rename the `value` column name to `Population`
-
-```{r}
-colnames(molten.BaltimoreWhitePop)[colnames(molten.BaltimoreWhitePop)=="value"] <- "Population"
+molten.BaltimoreWhitePop <- BaltimoreWhitePop %>% gather(key=AgeGroupGender, value=Population, -Geography)
 head(molten.BaltimoreWhitePop)
 ```
 
 Let us remove rows with from `variable` representing totals for each variable. This will simplify the summaries we create later with `dplyr`.
 
 ```{r}
-molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$variable!="Total",]
-molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$variable!="Male",]
-molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$variable!="Female",]
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$AgeGroupGender!="Total",]
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$AgeGroupGender!="Male",]
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop[molten.BaltimoreWhitePop$AgeGroupGender!="Female",]
 ```
 
 Now, let us create two empty columns, `AgeGroup` and `Gender`.
@@ -354,13 +331,13 @@ Let us now fill our `AgeGroup` and `Gender` columns with information from our `v
 To do this we will we will identify patterns within strings and use those specific pattern to fill up our `AgeGroup` and `Gender` columns. This will involve using the `substr()` function along with an ifelse() statement for each of our columns. We will check whether our ifelse() functions worked by combining the `sum()` and `is.na()` functions.
 
 ```{r}
-molten.BaltimoreWhitePop$variable <- as.character(molten.BaltimoreWhitePop$variable)
-molten.BaltimoreWhitePop$Gender <- ifelse(substr(molten.BaltimoreWhitePop$variable,1,4)=="Male","Male",
-ifelse(substr(molten.BaltimoreWhitePop$variable,1,6)=="Female","Female",NA
+molten.BaltimoreWhitePop$AgeGroupGender <- as.character(molten.BaltimoreWhitePop$AgeGroupGender)
+molten.BaltimoreWhitePop$Gender <- ifelse(substr(molten.BaltimoreWhitePop$AgeGroupGender,1,4)=="Male","Male",
+ifelse(substr(molten.BaltimoreWhitePop$AgeGroupGender,1,6)=="Female","Female",NA
        )
 )
-molten.BaltimoreWhitePop$AgeGroup <- ifelse(substr(molten.BaltimoreWhitePop$variable,1,4)=="Male",str_replace_all(molten.BaltimoreWhitePop$variable,"Male",""),
-                                            ifelse(substr(molten.BaltimoreWhitePop$variable,1,6)=="Female",str_replace_all(molten.BaltimoreWhitePop$variable,"Female",""),NA)
+molten.BaltimoreWhitePop$AgeGroup <- ifelse(substr(molten.BaltimoreWhitePop$AgeGroupGender,1,4)=="Male",str_replace_all(molten.BaltimoreWhitePop$AgeGroupGender,"Male",""),
+                                            ifelse(substr(molten.BaltimoreWhitePop$AgeGroupGender,1,6)=="Female",str_replace_all(molten.BaltimoreWhitePop$AgeGroupGender,"Female",""),NA)
                                             )
 head(molten.BaltimoreWhitePop)
 ```
@@ -368,20 +345,20 @@ head(molten.BaltimoreWhitePop)
 We can get rid of extraneous fields now that we have the fields we need.
 
 ```{r}
-molten.BaltimoreWhitePop$variable <- NULL
-```
-
-Our `Population` variable should be last in our dataframe. `dplyr` could be helpful for this purpose. Let's select/subset the entire dataframe and conveniently reorder our columns. Notice that quotation marks are not necessary after piping with `dplyr`.
-
-```{r}
-molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop %>% select(Geography,Gender,AgeGroup,Population)
-head(molten.BaltimoreWhitePop)
+molten.BaltimoreWhitePop$AgeGroupGender <- NULL
 ```
 
 Recall leaving the `Geography` column as good practice. Leaving columns specific to a dataframe allow the dataframe to be easily identified from other dataframes after merging. We will be merging this dataframe to the other census dataframe to create a new dataframe with the population demographics we will be adjusting for in our analysis. To help identify which race this dataframe is specific to, we will add a new column, `Race`, with an appropriate factor.
 
 ```{r}
 molten.BaltimoreWhitePop$Race <- as.factor("White")
+```
+
+Our `Population` variable should be last in our dataframe. `dplyr` could be helpful for this purpose. Let's select/subset the entire dataframe and conveniently reorder our columns. Notice that quotation marks are not necessary after piping with `dplyr`.
+
+```{r}
+molten.BaltimoreWhitePop <- molten.BaltimoreWhitePop %>% arrange(Geography,AgeGroup,Gender,Race,Population)
+head(molten.BaltimoreWhitePop)
 ```
 
 Let us take a quick look at our progress thus far.
@@ -403,24 +380,24 @@ colnames(BaltimoreBlackPop) <- str_remove(colnames(BaltimoreBlackPop),"Estimate;
 colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), "[[:punct:]]", "")
 colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), " ", "")
 colnames(BaltimoreBlackPop) <- str_replace_all(colnames(BaltimoreBlackPop), "years", "")
-molten.BaltimoreBlackPop <- melt(BaltimoreBlackPop, id = c("Geography"))
-colnames(molten.BaltimoreBlackPop)[colnames(molten.BaltimoreBlackPop)=="value"] <- "Population"
-molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Total",]
-molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Male",]
-molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$variable!="Female",]
+molten.BaltimoreBlackPop <- BaltimoreBlackPop %>% gather(key=AgeGroupGender, value=Population, -Geography)
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$AgeGroupGender!="Total",]
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$AgeGroupGender!="Male",]
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop[molten.BaltimoreBlackPop$AgeGroupGender!="Female",]
 molten.BaltimoreBlackPop$AgeGroup <- NA
 molten.BaltimoreBlackPop$Gender <- NA
-molten.BaltimoreBlackPop$variable <- as.character(molten.BaltimoreBlackPop$variable)
-molten.BaltimoreBlackPop$Gender <- ifelse(substr(molten.BaltimoreBlackPop$variable,1,4)=="Male","Male",
-ifelse(substr(molten.BaltimoreBlackPop$variable,1,6)=="Female","Female",NA
+molten.BaltimoreBlackPop$AgeGroupGender <- as.character(molten.BaltimoreBlackPop$AgeGroupGender)
+molten.BaltimoreBlackPop$Gender <- ifelse(substr(molten.BaltimoreBlackPop$AgeGroupGender,1,4)=="Male","Male",
+ifelse(substr(molten.BaltimoreBlackPop$AgeGroupGender,1,6)=="Female","Female",NA
        )
 )
-molten.BaltimoreBlackPop$AgeGroup <- ifelse(substr(molten.BaltimoreBlackPop$variable,1,4)=="Male",str_replace_all(molten.BaltimoreBlackPop$variable,"Male",""),
-                                            ifelse(substr(molten.BaltimoreBlackPop$variable,1,6)=="Female",str_replace_all(molten.BaltimoreBlackPop$variable,"Female",""),NA)
+molten.BaltimoreBlackPop$AgeGroup <- ifelse(substr(molten.BaltimoreBlackPop$AgeGroupGender,1,4)=="Male",str_replace_all(molten.BaltimoreBlackPop$AgeGroupGender,"Male",""),
+                                            ifelse(substr(molten.BaltimoreBlackPop$AgeGroupGender,1,6)=="Female",str_replace_all(molten.BaltimoreBlackPop$AgeGroupGender,"Female",""),NA)
                                             )
-molten.BaltimoreBlackPop$variable <- NULL
-molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop %>% select(Geography,Gender,AgeGroup,Population)
+molten.BaltimoreBlackPop$AgeGroupGender <- NULL
 molten.BaltimoreBlackPop$Race <- as.factor("Black")
+molten.BaltimoreBlackPop <- molten.BaltimoreBlackPop %>% 
+arrange(Geography,AgeGroup,Gender,Race,Population)
 head(molten.BaltimoreBlackPop)
 ```
 
@@ -565,6 +542,22 @@ AnalysisDF$Year <- year(AnalysisDF$ArrestDate)
 head(AnalysisDF)
 ```
 
+Because we'll be analyzing temporal data, we should convert our temporal data into various units for analysis. 
+
+```{r}
+AnalysisDF <- AnalysisDF %>% mutate(ArrestDay = floor_date(ArrestDate,"day"),
+                                    ArrestWeekday=weekdays(ArrestDate),
+                                    ArrestWeek=floor_date(ArrestDate,"week"),
+                                    ArrestMonth=floor_date(ArrestDate,"month"),
+                          ArrestQuarter=floor_date(ArrestDate,"quarter"),
+                          ArrestSeason=floor_date(ArrestDate,"season"),
+                          ArrestYear=floor_date(ArrestDate,"year"))
+
+AnalysisDF$ArrestWeekday <- factor(AnalysisDF$ArrestWeekday, levels = c("Sunday", "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"),labels = c("Sun","Mon","Tue","Wed","Thu","Fri","Sat"), ordered = TRUE)
+
+head(AnalysisDF)
+```
+
 Let's explore the data! 
 
 # Exploratory data analysis
@@ -577,8 +570,8 @@ Our data is currently grouped by date in `%m/%d/%y` format. Given the number of 
 
 **alpha does not work on geom_point**
 
-```{r}
-AnalysisDF %>% group_by(week=floor_date(ArrestDate,"week")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x = week, y=n))+
+```{r, message=FALSE}
+AnalysisDF %>% group_by(week=ArrestWeek) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x = week, y=n))+
   geom_point()+
   geom_smooth(color="red")+
   xlab('')+
@@ -599,44 +592,84 @@ The deaths of Michael Brown and Freddie Gray both appear to immediately precede 
 
 We can use `gridExtra` to place all these plots in a single plot. This makes comparisons a bit easier. 
 
-```{r}
-library(gridExtra)
-```
-
 2019 has incomplete data, let's exclude it for now. 
 
 ```{r}
-day2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(day=floor_date(ArrestDate,"day")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=day, y=n))+
+day <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(day=ArrestDay) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=day, y=n))+
   geom_line(color="red")
 ```
 
 ```{r}
-week2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(week=floor_date(ArrestDate,"week")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=week, y=n))+
+week <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(week=ArrestWeek) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=week, y=n))+
   geom_line(color="purple")
 ```
 
 ```{r}
-month2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(month=floor_date(ArrestDate,"month")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=month, y=n))+
+month <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(month=ArrestMonth) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=month, y=n))+
   geom_line(color="green")
 ```
 
 ```{r}
-season2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(season=floor_date(ArrestDate,"season")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=season, y=n))+
-  geom_line(color="blue")
-```
-
-```{r}
-quarter2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(quarter=floor_date(ArrestDate,"quarter")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=quarter, y=n))+
+quarter <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(quarter=ArrestQuarter) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=quarter, y=n))+
   geom_line(color="pink")
 ```
 
 ```{r}
-year2 <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(year=floor_date(ArrestDate,"year")) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=year, y=n))+
+season <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(season=ArrestQuarter) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=season, y=n))+
+  geom_line(color="blue")
+```
+
+```{r}
+year <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(year=ArrestYear) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=year, y=n))+
   geom_line(color="orange")
 ```
 
 ```{r}
-grid.arrange(day2,week2,month2,season2,quarter2,year2,nrow=3,ncol=2,top="Plot 2")
+grid.arrange(day,week,month,quarter,season,year,nrow=3,ncol=2,top="Plot 2")
+```
+
+It looks like using month units works well for observing large and small scale variation. We will use unit to explore the data some more temporally. Note that our decision to use this unit is strictly for vizualization purposes and does not necessarily mean that any specific pattern exists for statistical purposes. 
+
+```{r}
+AnalysisDF %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=ArrestMonth, y=n,color=AgeGroup))+
+  geom_line(size=0.25,alpha=1)+
+  facet_grid(Gender~Race)
+```
+
+Our vizualizations for representing Black or male arrests appear to highlight clear differences in arrest counts by age group. Let us now use rates.
+
+```{r}
+AnalysisDF %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=sum(Arrests)/sum(Population)) %>% ggplot(aes(x=ArrestMonth, y=r,color=AgeGroup))+
+  geom_line(size=0.25,alpha=1)+
+  facet_grid(Gender~Race)
+```
+
+Note the two signals in one of the younger age groups for white females. This could either be indicative of short term variation we should be aware of of a small number problem. Recall that the small number problem occurs when the numerator for rates is small and thus small changes in its count result in very large changes in a rate. We could check to see if these signals are a result of a small number problem. 
+
+**Need to show graphical representation of small number problem that is intuitive, currently incorrect**
+
+```{r}
+SignalDF <- AnalysisDF %>% filter(Year==2015:2017,Gender=="Female",Race=="White",AgeGroup=="20to24") %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% select(ArrestMonth,Race,Gender,AgeGroup,Arrests,Population,r)
+
+theoretical_arrests<- 1:100
+theoretical_rate <- seq(1,100,by=1)/6744
+theoretical_rate_by_arrests <- as.data.frame(cbind(theoretical_arrests,theoretical_rate))
+
+ggplot(SignalDF[ntile(SignalDF$r,4)==4,],aes(x=Arrests,y=r))+
+  geom_point()
+
+ggplot(theoretical_rate_by_arrests)+
+  geom_point(aes(x=theoretical_arrests, y=theoretical_rate))
+```
+
+As you can see, the arrest counts are very low. It is likely that the signal found in the plot we made was just a result of unstable rates.
+
+Weekdays cannot be linearly plotted, meaning we need to examine arrest counts by weekdays separately. Again, we will exlude 2019. 
+
+```{r}
+AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(ArrestWeekday,Race,Gender,AgeGroup) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=ArrestWeekday,y=n,fill=AgeGroup))+
+  geom_bar(stat="identity",position = 'dodge')+
+  facet_grid(Gender~Race)
 ```
 
 # Data analysis 
