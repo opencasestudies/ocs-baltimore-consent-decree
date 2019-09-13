@@ -654,12 +654,18 @@ SignalDF <- AnalysisDF %>% filter(Year==2015:2017,Gender=="Female",Race=="White"
 theoretical_arrests<- 1:100
 theoretical_rate <- seq(1,100,by=1)/6744
 theoretical_rate_by_arrests <- as.data.frame(cbind(theoretical_arrests,theoretical_rate))
+theoretical_rate_by_arrests$theoretical_rate_ratio <- lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate
+theoretical_rate_by_arrests$theoretical_rate_ratio_inverse <- 1/(lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate)
 
-ggplot(SignalDF[ntile(SignalDF$r,4)==4,],aes(x=Arrests,y=r))+
-  geom_point()
+#gather so that two lines can be made
+theoretical_rate_by_arrests <- theoretical_rate_by_arrests %>% gather(key=Type,value=Value,theoretical_rate_ratio,theoretical_rate_ratio_inverse,-theoretical_rate,-theoretical_arrests)
 
-ggplot(theoretical_rate_by_arrests)+
-  geom_point(aes(x=theoretical_arrests, y=theoretical_rate))
+theoretical_rate_by_arrests <- theoretical_rate_by_arrests[complete.cases(theoretical_rate_by_arrests)==TRUE,]
+
+ggplot(theoretical_rate_by_arrests,aes(x=theoretical_arrests, y=Value,color=Type))+
+  geom_point(size=0.5)+
+  geom_line()+
+  geom_vline(xintercept=7,color="black")
 ```
 
 As you can see, the arrest counts are very low. It is likely that the signal found in the plot we made was just a result of unstable rates.
