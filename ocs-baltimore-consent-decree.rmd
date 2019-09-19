@@ -659,8 +659,8 @@ SignalDF <- AnalysisDF %>% filter(Year==2015:2017,Gender=="Female",Race=="White"
 unstable_arrest_counts <- unique(SignalDF) 
 length(unstable_arrest_counts)
 
-theoretical_arrests<- 1:100
-theoretical_rate <- seq(1,100,by=1)/6744
+theoretical_arrests<- 1:10
+theoretical_rate <- seq(1,10,by=1)/6744
 theoretical_rate_by_arrests <- as.data.frame(cbind(theoretical_arrests,theoretical_rate))
 theoretical_rate_by_arrests$theoretical_rate_ratio <- lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate
 theoretical_rate_by_arrests$theoretical_rate_ratio_inverse <- 1/(lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate)
