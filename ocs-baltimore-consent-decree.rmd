@@ -26,6 +26,8 @@ knitr::opts_chunk$set(echo = TRUE)
 + When running a model with all - 1 covariates I get a warning message lgm.fit :algorithm did not converge.
     + What does this mean? 
 + NA values in glm model output 
++ How to check for multicollinearity given dummy variables
+
 # Motivation 
 
 Following the death of Freddie Gray on April 12^th^, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge.
@@ -74,6 +76,7 @@ library(gridExtra)
 library(lubridate)
 library(stringr)
 library(MASS)
+library(kableExtra)
 ```
 
 We import arrest data, as well as census data by race. These files were downloaded from [American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/guided_search.xhtml) and [Open Baltimore](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
@@ -650,11 +653,12 @@ AnalysisDF %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=sum(Arres
 
 Note the two signals in one of the younger age groups for white females. This could either be indicative of short term variation we should be aware of of a small number problem. Recall that the small number problem occurs when the numerator for rates is small and thus small changes in its count result in very large changes in a rate. We could check to see if these signals are a result of a small number problem. 
 
-**Need to show graphical representation of small number problem that is intuitive, currently incorrect**
-
-SignalDF <- AnalysisDF %>% filter(Year==2015:2017,Gender=="Female",Race=="White",AgeGroup=="20to24") %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% select(ArrestMonth,Race,Gender,AgeGroup,Arrests,Population)
-
 ```{r}
+SignalDF <- AnalysisDF %>% filter(Year==2015:2017,Gender=="Female",Race=="White",AgeGroup=="20to24") %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% filter(r>=5e-04) %>% pull(Arrests)
+
+unstable_arrest_counts <- unique(SignalDF) 
+length(unstable_arrest_counts)
+
 theoretical_arrests<- 1:100
 theoretical_rate <- seq(1,100,by=1)/6744
 theoretical_rate_by_arrests <- as.data.frame(cbind(theoretical_arrests,theoretical_rate))
@@ -669,7 +673,7 @@ theoretical_rate_by_arrests <- theoretical_rate_by_arrests[complete.cases(theore
 ggplot(theoretical_rate_by_arrests,aes(x=theoretical_arrests, y=Value,color=Type))+
   geom_point(size=0.5)+
   geom_line()+
-  geom_vline(xintercept=7,color="black")
+  geom_vline(xintercept=unstable_arrest_counts[1],color="black")
 ```
 
 As you can see, the arrest counts are very low. It is likely that the signal found in the plot we made was just a result of unstable rates.
@@ -681,6 +685,18 @@ AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(ArrestWeekday,Race,Gender,
   geom_bar(stat="identity",position = 'dodge')+
   facet_grid(Gender~Race)
 ```
+
+Let's check our assumptions about the distribution of the outcome, arrest counts.
+
+```{r}
+arrests_n_per_day <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
+
+ggplot(data = arrests_n_per_day,
+       mapping = aes(sample = n)) + stat_qq(distribution = stats::qpois, dparams = list(lambda = mean(arrests_n_per_day$n)),size=2, alpha=0.1) + 
+  geom_line(data = data.frame(x = 10:173, n = 10:173), aes(x = x, y = n), colour = "red",alpha = 1,size=2) + ggtitle("QQ Plot, Poisson Distribution") + xlab("Theoretical Arrest Count") + ylab("Sample Arrest Count")
+```
+
+It looks like our counts per day do not fit the distribution
 
 # Data analysis 
 
@@ -702,13 +718,26 @@ How does our temporal data look like?
 
 Our temporal data is currently a date class, meaning R will recognize it as numeric. This will pose problems, as our model will resultantly try to fit a linear model and thus not account for trends within a certain time unit but attempt to explain an average change per time unit. In order to account for trends, we must create indicator variables for our temporal data. 
 
+`lubridate` has excellent functions for this. A good rule of thumb for properly creating indicator variables from date classes is that the output of a function that extracts values from date classes has to be ready for interpretable categorization with `as.factor`. In other words, the unique values produced during extraction should correspond to the intended categories. 
+
 ```{r}
-AnalysisDF$Month_IV <- as.factor(AnalysisDF$Month)
-AnalysisDF$ArrestWeek_IV <- as.factor(AnalysisDF$ArrestWeek)
-AnalysisDF$ArrestMonth_IV <- as.factor(AnalysisDF$ArrestMonth)
-AnalysisDF$ArrestQuarter_IV <- as.factor(AnalysisDF$ArrestQuarter)
-AnalysisDF$ArrestSeason_IV <- as.factor(AnalysisDF$ArrestSeason)
-AnalysisDF$ArrestYear_IV <- as.factor(AnalysisDF$ArrestYear)
+AnalysisDF$ArrestWeek_IV <- as.factor(week(AnalysisDF$ArrestDate))
+AnalysisDF$ArrestMonth_IV <- as.factor(month(AnalysisDF$ArrestDate))
+AnalysisDF$ArrestQuarter_IV <- as.factor(quarter(AnalysisDF$ArrestDate))
+AnalysisDF$ArrestYear_IV <- as.factor(year(AnalysisDF$ArrestDate))
+```
+
+Seasons also need to be generated. A good thing to know is that winter starts in December. With that information and `floor_date`, which rounds date class data down to the lowest boundary, we can assign seasons to our temporal data.
+
+```{r}
+AnalysisDF$ArrestSeason_IV <- floor_date(AnalysisDF$ArrestDate, "season")
+AnalysisDF$ArrestSeason_IV <- months(AnalysisDF$ArrestSeason_IV)
+AnalysisDF$ArrestSeason_IV <- as.factor(AnalysisDF$ArrestSeason_IV)
+AnalysisDF$ArrestSeason_IV <- factor(AnalysisDF$ArrestSeason_IV, levels = c("March", "June", "September","December"), labels = c("Spring","Summer","Fall","Winter"))
+```
+
+```{r}
+colnames(AnalysisDF)
 ```
 
 ```{r}
@@ -720,7 +749,7 @@ paste0("Pearson goodness of fit = ", round(chi_squareA,2), ", df = ", degrees_fr
 
 MODELA2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline, data=AnalysisDF, offset(log(Population)))
 
-AIC(MODELA2)
+AIC_A <- AIC(MODELA2)
 ```
 
 ```{r}
@@ -732,7 +761,7 @@ paste0("Pearson goodness of fit = ", round(chi_squareB,2), ", df = ", degrees_fr
 
 MODELB2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV, data=AnalysisDF, offset(log(Population)))
 
-AIC(MODELB2)
+AIC_B <- AIC(MODELB2)
 ```
 
 ```{r}
@@ -744,7 +773,7 @@ paste0("Pearson goodness of fit = ", round(chi_squareC,2), ", df = ", degrees_fr
 
 MODELC2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday, data=AnalysisDF, offset(log(Population)))
 
-AIC(MODELC2)
+AIC_C <- AIC(MODELC2)
 ```
 
 ```{r}
@@ -756,7 +785,7 @@ paste0("Pearson goodness of fit = ", round(chi_squareD,2), ", df = ", degrees_fr
 
 MODELD2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, offset(log(Population)))
 
-AIC(MODELD2)
+AIC_D <- AIC(MODELD2)
 ```
 
 ```{r}
@@ -768,10 +797,10 @@ paste0("Pearson goodness of fit = ", round(chi_squareE,2), ", df = ", degrees_fr
 
 MODELE2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, offset(log(Population)))
 
-AIC(MODELE2)
+AIC_E <- AIC(MODELE2)
 ```
 
-It looks like our quarter indicator variable better explains the data
+It looks like our season indicator variable better explains the data
 
 ```{r}
 MODELF1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
@@ -782,12 +811,50 @@ paste0("Pearson goodness of fit = ", round(chi_squareF,2), ", df = ", degrees_fr
 
 MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV, data=AnalysisDF, offset(log(Population)))
 
-AIC(MODELF2)
+AIC_F <- AIC(MODELF2)
 ```
 
 ```{r}
-summary(MODELF2)
+MODELG1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV + ArrestWeek_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
+
+chi_squareG = sum(residuals(MODELG1, type = "pearson")^2); degrees_freedomG = MODELG1$df.residual;
+p_valueG = 1-pchisq(chi_squareG, degrees_freedomG)
+paste0("Pearson goodness of fit = ", round(chi_squareG,2), ", df = ", degrees_freedomG, ", p-value = ", round(p_valueG,10))
+
+MODELG2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV + ArrestWeek_IV, data=AnalysisDF, offset(log(Population)))
+
+AIC_G <- AIC(MODELG2)
 ```
+
+```{r}
+model_names <- c("A",
+                 "B",
+                 "C",
+                 "D",
+                 "E",
+                 "F",
+                 "G")
+
+model_AICs <- c(AIC_A,
+                AIC_B,
+                AIC_C,
+                AIC_D,
+                AIC_E,
+                AIC_F,
+                AIC_G)
+
+model_AICs <- round(model_AICs, 0)
+
+model_AICs_table<- cbind(model_names, model_AICs)
+
+colnames(model_AICs_table) <- c("Model","AIC")
+
+kable(model_AICs_table) %>%
+  kable_styling(bootstrap_options = c("bordered","condensed")) %>%
+  row_spec(7, bold = T, color = "white", background = "black")
+```
+
+`r round((exp(summary(MODELG2)$coefficients["CD_lin_spline","Estimate"])*1000)-1000,2)` more arrests after the consent decree
 
 # Summary of results
 
