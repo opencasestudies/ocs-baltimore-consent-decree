@@ -671,17 +671,23 @@ theoretical_rate_by_arrests <- theoretical_rate_by_arrests %>% gather(key=Type,v
 theoretical_rate_by_arrests <- theoretical_rate_by_arrests[complete.cases(theoretical_rate_by_arrests)==TRUE,]
 
 ggplot(theoretical_rate_by_arrests,aes(x=theoretical_arrests, y=Value,color=Type))+
-  geom_point(size=0.5)+
-  geom_line()+
+  geom_point(size=1)+
+  geom_line(size=1)+
   geom_vline(xintercept=unstable_arrest_counts[1],color="black")
 ```
 
 As you can see, the arrest counts are very low. It is likely that the signal found in the plot we made was just a result of unstable rates.
 
-Weekdays cannot be linearly plotted, meaning we need to examine arrest counts by weekdays separately. Again, we will exlude 2019. 
+Weekdays cannot be linearly plotted, meaning we need to examine arrest counts by weekdays separately.
 
 ```{r}
-AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(ArrestWeekday,Race,Gender,AgeGroup) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=ArrestWeekday,y=n,fill=AgeGroup))+
+AnalysisDF %>% group_by(ArrestWeekday,Race,Gender,AgeGroup) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=ArrestWeekday,y=n,fill=AgeGroup))+
+  geom_bar(stat="identity",position = 'dodge')+
+  facet_grid(Gender~Race)
+```
+
+```{r}
+AnalysisDF %>% group_by(ArrestWeekday,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% ggplot(aes(x=ArrestWeekday,y=r,fill=AgeGroup))+
   geom_bar(stat="identity",position = 'dodge')+
   facet_grid(Gender~Race)
 ```
@@ -689,14 +695,22 @@ AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(ArrestWeekday,Race,Gender,
 Let's check our assumptions about the distribution of the outcome, arrest counts.
 
 ```{r}
-arrests_n_per_day <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
+arrests_n_per_day_poisson <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
 
-ggplot(data = arrests_n_per_day,
-       mapping = aes(sample = n)) + stat_qq(distribution = stats::qpois, dparams = list(lambda = mean(arrests_n_per_day$n)),size=2, alpha=0.1) + 
+ggplot(data = arrests_n_per_day_poisson,
+       mapping = aes(sample = n)) + stat_qq(distribution = stats::qpois, dparams = list(lambda = mean(arrests_n_per_day_poisson$n)),size=2, alpha=0.1) + 
   geom_line(data = data.frame(x = 10:173, n = 10:173), aes(x = x, y = n), colour = "red",alpha = 1,size=2) + ggtitle("QQ Plot, Poisson Distribution") + xlab("Theoretical Arrest Count") + ylab("Sample Arrest Count")
 ```
 
-It looks like our counts per day do not fit the distribution
+It looks like our counts per day do not fit the Poisson distribution
+
+```{r}
+arrests_n_per_day_nb <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
+
+ggplot(data = arrests_n_per_day_nb,
+       mapping = aes(sample = n)) + stat_qq(distribution = stats::qnbinom, dparams = list(mu = mean(arrests_n_per_day_nb$n), size=length(arrests_n_per_day_nb$n)),size=2, alpha=0.1) + 
+  geom_line(data = data.frame(x = 10:173, n = 10:173), aes(x = x, y = n), colour = "red",alpha = 1,size=2) + ggtitle("QQ Plot, Negative Binomal Distribution") + xlab("Theoretical Arrest Count") + ylab("Sample Arrest Count")
+```
 
 # Data analysis 
 
@@ -753,78 +767,74 @@ AIC_A <- AIC(MODELA2)
 ```
 
 ```{r}
-MODELB1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
+MODELB1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 chi_squareB = sum(residuals(MODELB1, type = "pearson")^2); degrees_freedomB = MODELB1$df.residual;
 p_valueB = 1-pchisq(chi_squareB, degrees_freedomB)
 paste0("Pearson goodness of fit = ", round(chi_squareB,2), ", df = ", degrees_freedomB, ", p-value = ", round(p_valueB,10))
 
-MODELB2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV, data=AnalysisDF, offset(log(Population)))
+MODELB2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday, data=AnalysisDF, offset(log(Population)))
 
 AIC_B <- AIC(MODELB2)
 ```
 
 ```{r}
-MODELC1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday, data=AnalysisDF, family=poisson, offset(log(Population)))
+MODELC1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 chi_squareC = sum(residuals(MODELC1, type = "pearson")^2); degrees_freedomC = MODELC1$df.residual;
 p_valueC = 1-pchisq(chi_squareC, degrees_freedomC)
 paste0("Pearson goodness of fit = ", round(chi_squareC,2), ", df = ", degrees_freedomC, ", p-value = ", round(p_valueC,10))
 
-MODELC2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday, data=AnalysisDF, offset(log(Population)))
+MODELC2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, offset(log(Population)))
 
 AIC_C <- AIC(MODELC2)
 ```
 
 ```{r}
-MODELD1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
+MODELD1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 chi_squareD = sum(residuals(MODELD1, type = "pearson")^2); degrees_freedomD = MODELD1$df.residual;
 p_valueD = 1-pchisq(chi_squareD, degrees_freedomD)
 paste0("Pearson goodness of fit = ", round(chi_squareD,2), ", df = ", degrees_freedomD, ", p-value = ", round(p_valueD,10))
 
-MODELD2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, offset(log(Population)))
+MODELD2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, offset(log(Population)))
 
 AIC_D <- AIC(MODELD2)
 ```
 
+It appears that our quarter indicator variable better explains within year variation than does that season indicator variable.
+
 ```{r}
-MODELE1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
+MODELE1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestMonth_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 chi_squareE = sum(residuals(MODELE1, type = "pearson")^2); degrees_freedomE = MODELE1$df.residual;
 p_valueE = 1-pchisq(chi_squareE, degrees_freedomE)
 paste0("Pearson goodness of fit = ", round(chi_squareE,2), ", df = ", degrees_freedomE, ", p-value = ", round(p_valueE,10))
 
-MODELE2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, offset(log(Population)))
+MODELE2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestMonth_IV, data=AnalysisDF, offset(log(Population)))
 
 AIC_E <- AIC(MODELE2)
 ```
 
-It looks like our season indicator variable better explains the data
+It appears that our month indicator variable explains within year variation moreso than our quarter indicator variable.
+
+We will create one last model that will determine whether there is an interaction between our consent decree and race indicator variables.
 
 ```{r}
-MODELF1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
+MODELF1 <- glm(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 chi_squareF = sum(residuals(MODELF1, type = "pearson")^2); degrees_freedomF = MODELF1$df.residual;
 p_valueF = 1-pchisq(chi_squareF, degrees_freedomF)
 paste0("Pearson goodness of fit = ", round(chi_squareF,2), ", df = ", degrees_freedomF, ", p-value = ", round(p_valueF,10))
 
-MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV, data=AnalysisDF, offset(log(Population)))
+MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, offset(log(Population)))
 
 AIC_F <- AIC(MODELF2)
 ```
 
-```{r}
-MODELG1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV + ArrestWeek_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
+It seems that we have ran out of covariates to explore. 
 
-chi_squareG = sum(residuals(MODELG1, type = "pearson")^2); degrees_freedomG = MODELG1$df.residual;
-p_valueG = 1-pchisq(chi_squareG, degrees_freedomG)
-paste0("Pearson goodness of fit = ", round(chi_squareG,2), ", df = ", degrees_freedomG, ", p-value = ", round(p_valueG,10))
-
-MODELG2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestYear_IV + ArrestWeekday + ArrestSeason_IV + ArrestMonth_IV + ArrestWeek_IV, data=AnalysisDF, offset(log(Population)))
-
-AIC_G <- AIC(MODELG2)
-```
+Let us review the AIC values for our models. 
 
 ```{r}
 model_names <- c("A",
@@ -832,16 +842,14 @@ model_names <- c("A",
                  "C",
                  "D",
                  "E",
-                 "F",
-                 "G")
+                 "F")
 
 model_AICs <- c(AIC_A,
                 AIC_B,
                 AIC_C,
                 AIC_D,
                 AIC_E,
-                AIC_F,
-                AIC_G)
+                AIC_F)
 
 model_AICs <- round(model_AICs, 0)
 
@@ -851,13 +859,13 @@ colnames(model_AICs_table) <- c("Model","AIC")
 
 kable(model_AICs_table) %>%
   kable_styling(bootstrap_options = c("bordered","condensed")) %>%
-  row_spec(7, bold = T, color = "white", background = "black")
+  row_spec(6, bold = T, color = "white", background = "black")
 ```
 
-`r round((exp(summary(MODELG2)$coefficients["CD_lin_spline","Estimate"])*1000)-1000,2)` more arrests after the consent decree
+`r round((exp(summary(MODELF2)$coefficients["RaceWhite:CD_lin_spline","Estimate"])*1000)-1000,2)` more white people were arrested per 1000 arrests made. 
 
 # Summary of results
 
-The consent decree was followed by an increase in (approximately *X* more arrests per 1000 arrests made prior to the consent decree. Despite this increase, people who were Black were less susceptible to arrest following the implementation of the consent decree. Following the implementation of the consent decree, there were approximately *Y* less arrests of Black people per 1000 arrests made prior to its implementation. 
+The consent decree was followed by an increase in (approximately `r round((exp(summary(MODELF2)$coefficients["CD_lin_spline","Estimate"])*1000)-1000,2)` more arrests per 1000 arrests made prior to the consent decree. Despite this increase, people who were Black were less susceptible to arrest following the implementation of the consent decree. Following the implementation of the consent decree, there were approximately *Y* less arrests of Black people per 1000 arrests made prior to its implementation. 
 
 Ultimately, the consent decree led to an overall increase in arrest rates for Black and White people in Baltimore. The consent decree did, however, reduce the disparities in arrest rates between Black and White people in Baltimore.
