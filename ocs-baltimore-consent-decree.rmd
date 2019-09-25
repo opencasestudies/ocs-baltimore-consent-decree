@@ -30,9 +30,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Motivation 
 
-Following the death of Freddie Gray on April 12^th^, 2015, Mayor Blake formally requested that an investigation of the City's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge.
+Following the death of Freddie Gray on April 12^th^, 2015, Mayor Stephanie Rawlings-Blake formally requested that an investigation of Baltimore's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge. *LRJ: can we add a date for the approval and a date for when it would go into effect?  Can we link to an article that summarizes the significance of Freddie Gray's death?*
 
-The goal of the consent decree between the City of Baltimore and the DoJ is to ensure that the Baltimore Police Department resolve the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, the practical impact of the consent decree is still unknown, largely because the scope of its various components and the underlying complexity of each of those components.
+The goal of the consent decree is to ensure that the Baltimore Police Department resolve the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, the practical impact of the consent decree is still unknown, largely because the scope of its various components and the underlying complexity of each of those components.
 
 An excerpt from page 48 of [the DoJ's report](https://www.justice.gov/crt/file/883296/download) highlights the multiple infractions suspected of the Baltimore Police Department: 
 
@@ -45,7 +45,17 @@ div.white { background-color:#F5F5F5   ; border-radius: 20px; padding: 20px;}
 
 </div>
 
-**For our analysis, we will focus on determining the extent of arrest disparities, if any, and whether the consent decree had an effect on these disparities.** *Correct this: this analysis is more about assessing whether the consent decree had an effect*
+In this case study, we will look at patterns in arrests by BPD over time with the goal of assessing whether the consent decree had an impact on arrest patterns. 
+
+The libraries used in this case study will be:
+
++ `tidyverse`, for data wranging and summarization, amongst other things, from a number of packages
+
++ `ggplot2`, for beautiful visualizations with ready data
+
++ `lubridate`, for converting time data into a form that can be used
+
++ continue to list them/describe them here
 
 # What is the data? 
 
@@ -55,19 +65,11 @@ The analysis uses data from two sources:
 
 + [American Community Survey](https://www.census.gov/programs-surveys/acs)
 
+**LRJ: need more here -- describe what data we will be getting from each of these sources**
+
 # Data import {#data-import}
 
-Before we import the data, let us think about the project. At the heart of our analysis is poisson regression involving time, meaning we'll need to check our statistical assumptions down the line and acPopulation for possible temporal trends. We'll also be modifying, but not altering, the data substantially for this analysis since the data we downloaded does not come in a form that is ready to analyze---this process is called *data wrangling*. Lastly, we'll be making visualizations to help us identify what would otherwise be complicated patterns in the data. It would help to have forge multiple visualizations into one. 
-
-A few packages immediately come to mind: 
-
-+ `tidyverse`, for data wranging and summarization, amongst other things, from a number of packages
-
-+ `ggplot2`, for beautiful visualizations with ready data
-
-+ `lubridate`, for converting time data into a form that can be used
-
-We'll load other packages as we enPopulationer roadblocks. For now, we'll load these packages, as it is very that likely we'll use them.
+We start by loading the libraries we will need for this case study.
 
 ```{r, warning=FALSE, message=FALSE}
 library(tidyverse)
@@ -79,10 +81,13 @@ library(MASS)
 library(kableExtra)
 ```
 
+**LRJ: I would separate the import of the two datasets.  First import and talk about the arrest data.  Then do the same with the population data after talking about how we need population data in order to work with arrest rates rather than counts of arrests.  In addition to talking about the dimension of each data frame, say a little bit (be brief) about what variables are in each.**
+
 We import arrest data, as well as census data by race. These files were downloaded from [American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/guided_search.xhtml) and [Open Baltimore](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
 
+**LRJ: we want to read in with the read_csv() function.  we may have to fix some variable names after doing this**
 ```{r}
-BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv", header=TRUE)
+BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv")
 ```
 
 ```{r, eval=FALSE}
@@ -169,11 +174,23 @@ Let us see what variables we are working with.
 colnames(BPD_Arrests_March1)
 ```
 
+**LRJ: give a brief description of each variable here**
+
 We can get rid of the spatial data.
 
 ```{r}
 SpatialData_no_coordinates <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes","Longitude","Latitude")
 BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% SpatialData_no_coordinates]
+colnames(BPD_Arrests_March1)
+```
+
+**LRJ: we want to do the above with the tidyverse, need to talk about MASS package ans select function**
+```{r}
+SpatialData_no_coordinates <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes","Longitude","Latitude")
+
+BPD_Arrests_March1 <- BPD_Arrests_March1 %>%
+  dplyr::select(-one_of(SpatialData_no_coordinates))
+
 colnames(BPD_Arrests_March1)
 ```
 
@@ -186,6 +203,8 @@ colnames(BPD_Arrests_March1)
 ```
 
 What type of data are we working with? Rather than use the `class()` function for each individual variable, we can use `lapply()` to apply the `class()` function to all of our columns. `lapply()` and the other functions in the `apply()` family (see ?apply, ?sapply, ?vapply) are great for applying functions across objects. 
+
+**LRJ: Update this after using read_csv()**
 
 ```{r}
 lapply(BPD_Arrests_March1[,1:length(colnames(BPD_Arrests_March1))],class)
