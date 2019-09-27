@@ -28,6 +28,11 @@ knitr::opts_chunk$set(echo = TRUE)
 + NA values in glm model output 
 + How to check for multicollinearity given dummy variables
 
+```{r}
+seed <- sum(c(which(letters=='o'), which(letters=='c'), which(letters=='s')))
+set.seed(seed)
+```
+
 # Motivation 
 
 Following the death of Freddie Gray on April 12^th^, 2015, Mayor Stephanie Rawlings-Blake formally requested that an investigation of Baltimore's policing practices be taken by the Department of Justice (DoJ). The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) took part in unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge. *LRJ: can we add a date for the approval and a date for when it would go into effect?  Can we link to an article that summarizes the significance of Freddie Gray's death?*
@@ -36,26 +41,32 @@ The goal of the consent decree is to ensure that the Baltimore Police Department
 
 An excerpt from page 48 of [the DoJ's report](https://www.justice.gov/crt/file/883296/download) highlights the multiple infractions suspected of the Baltimore Police Department: 
 
-<style>
-div.white { background-color:#F5F5F5   ; border-radius: 20px; padding: 20px;}
-</style>
-<div class = "white">
+---
 
 ![](DoJ_Excerpt.png)
 
-</div>
+---
+
 
 In this case study, we will look at patterns in arrests by BPD over time with the goal of assessing whether the consent decree had an impact on arrest patterns. 
+
+The learning objectives include data wrangling, data visualization, regular expressions, and Poisson regression. 
 
 The libraries used in this case study will be:
 
 + `tidyverse`, for data wranging and summarization, amongst other things, from a number of packages
 
-+ `ggplot2`, for beautiful visualizations with ready data
++ `ggplot2`, for creating beautiful visualizations with ready data
 
 + `lubridate`, for converting time data into a form that can be used
 
-+ continue to list them/describe them here
++ `MASS`, for conducting a negative binomial regression
+
++ `stringr`, for handling regular expression
+
++ `kableExtra`, for creating beautiful HTML tables
+
++ `gridExtra`, for creating plots of plots
 
 # What is the data? 
 
@@ -65,46 +76,106 @@ The analysis uses data from two sources:
 
 + [American Community Survey](https://www.census.gov/programs-surveys/acs)
 
-**LRJ: need more here -- describe what data we will be getting from each of these sources**
+Open Baltimore is a web portal with Baltimore specific data managed by the City of Baltimore. All arrest data from the Baltimore Police Department used in this analysis is made available on Open Baltimore [here](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
+
+The American Community Survey is an ongoing survey by the US Census Bureau that captures demographic information for the United States and its regions. We will be using age, sex, and race data (tables B01001A and B01001B) for the county "Baltimore city, Maryland." This data is made available by the US Census Bureau [here](https://www.census.gov/data.html). 
 
 # Data import {#data-import}
 
 We start by loading the libraries we will need for this case study.
 
 ```{r, warning=FALSE, message=FALSE}
+library(MASS)
 library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 library(lubridate)
 library(stringr)
-library(MASS)
 library(kableExtra)
 ```
 
 **LRJ: I would separate the import of the two datasets.  First import and talk about the arrest data.  Then do the same with the population data after talking about how we need population data in order to work with arrest rates rather than counts of arrests.  In addition to talking about the dimension of each data frame, say a little bit (be brief) about what variables are in each.**
 
+**DESCRIBE EACH DATA SET AFTER LOADING IT** 
+
 We import arrest data, as well as census data by race. These files were downloaded from [American FactFinder](https://factfinder.census.gov/faces/nav/jsf/pages/guided_search.xhtml) and [Open Baltimore](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
 
 **LRJ: we want to read in with the read_csv() function.  we may have to fix some variable names after doing this**
+
 ```{r}
-BPD_Arrests_March1 <- read.csv("BPD_Arrests_March1.csv")
+BPD_Arrests_March1 <- read_csv("BPD_Arrests_March1.csv")
 ```
 
-```{r, eval=FALSE}
-View(BPD_Arrests_March1)
+Notice the number of parsing failures. `read_csv()` predicts the class of each column when loading data. Sometimes these predictions are difficult for `read_csv` to make when the data has errors. Sometimes these predictions are incorrect.
+
+Still, these predictions and errors are useful. With `read_csv()`, we can explicitly assign data classes. Having predictions beforehand allows us to see our data and identify potential data collection errors. 
+
+The `problems()` function from `read_csv` allows us to retrieve the problems see in our initial `read_csv` output. We can determine which columns were causing problems by converting the `tibble` created by `read_csv()` into a dataframe using `as.data.frame`, converting the `col` column to a format `as.factor()` can comprehend, and then using the `summary()` function to create a count of parsing problems caused by each column in our original dataframe. 
+
+```{r}
+summary(as.factor(as.data.frame(problems(BPD_Arrests_March1))[,"col"]))
 ```
 
-![](View()_1.png)
+It looks like our coordinate data is causing problems.
+
+If we look at the actual output created by the `problems()` function, we see that the there is some `character` class data where `double`/`numeric` class data should be. 
+
+```{r}
+problems(BPD_Arrests_March1)
+```
+
+Let's look the columns we will be working with.
+
+```{r}
+colnames(BPD_Arrests_March1)
+```
+
+As you can see, we have some demographic information about the person arrested. We also have some information about the nature of the arrest. Spatial data is also available. 
+
+The object containing our data is currently a `tibble`. The `tibble` class is great for printing data neatly, but in most cases does not provide substantial advantages over the `dataframe` class. To get a peak at our data without any of the special formatting provided by the `tibble` class, we can use the functions `as.data.frame()` and `head()` to print all columns of data for the first several rows.  
+
+```{r}
+head(as.data.frame(BPD_Arrests_March1))
+```
+
+Now that we know what data we are working with, let's specify the classes of our columns with `read_csv()`. 
+
+We have the option to not read in some of the data while we are specifying the classes with `read_csv()`. This can be done with the `cols_only()` function, which specifies which columns to read in. 
+
+If we run the code below, we get a parsing failure for each row with a date.
+
+```{r}
+BPD_Arrests_March1 <- read_csv("BPD_Arrests_March1.csv", col_types = cols_only(Age=col_character(),
+                                                                          Sex=col_character(),
+                                                                          Race=col_character(),
+                                                                          ArrestDate=col_date()))
+```
+
+This is because `read_csv` cannot read in our date data in its current form. 
+
+For now, let's specify all of the columns we will be using as a `character class`.
+
+Using the `character` class for data allows us to convert columns of our data to the appropriate class afterward without any formatting issues. This is particularly useful when data is not in a form that read_csv can use to specify a particular class like in the case above.
+
+Let's read in the data using the more conservative approach of specifying the columns we need as a `character` class. 
+
+```{r}
+BPD_Arrests_March1 <- read_csv("BPD_Arrests_March1.csv", col_types = cols_only(Age=col_integer(),
+                                                                          Sex=col_character(),
+                                                                          Race=col_character(),
+                                                                          ArrestDate=col_character()))
+```
+
+Let's check if our `tibble` has any problems.
+
+```{r}
+length(as.factor(as.data.frame(problems(BPD_Arrests_March1))[,"col"]))
+```
 
 ```{r}
 BaltimoreWhitePop <- read.csv("ACS_17_5YR_B01001A_W.csv", header=FALSE) #Update this to reflect download name of csv from actual source.
 ```
 
-```{r, eval=FALSE}
-View(BaltimoreWhitePop)
-```
-
-![](View()_2.png)
 
 ```{r}
 BaltimoreBlackPop <- read.csv("ACS_17_5YR_B01001B_BAA.csv", header=FALSE) #Update this to reflect download name of csv from actual source.
@@ -166,57 +237,49 @@ We'll begin by making each of the three dataframes more practical to use. Then w
 
 We'll begin with the arrest data.
 
-![](View()_1.png)
-
-Let us see what variables we are working with. 
-
-```{r}
-colnames(BPD_Arrests_March1)
-```
-
-**LRJ: give a brief description of each variable here**
+**Consider removing this.**
 
 We can get rid of the spatial data.
 
-```{r}
-SpatialData_no_coordinates <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes","Longitude","Latitude")
-BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% SpatialData_no_coordinates]
-colnames(BPD_Arrests_March1)
-```
+We need to be careful when doing this, however. We have the `MASS` and `tidyverse` package loaded. `dplyr`, a package within the `tidyverse`, has a function that we can use called `select()`. `MASS` also has a `select()` function. These functions, `dplyr::select()` and `MASS::select()`, although identically named, are different, meaning whichever package we load second will mask the identically named function of the package loaded first. Since we loaded `dplyr` second (by loading `tidyverse`), our `select()` function is that from `dplyr`. A sure way to use the specific function you intend to use is by specifying the package with a prefix of the form `package::function()`. We do this below, although it isn't necessary since `dplyr`(again, from `tidyverse`) was loaded second.
+**Consider removing this.^**
 
-**LRJ: we want to do the above with the tidyverse, need to talk about MASS package ans select function**
-```{r}
-SpatialData_no_coordinates <- c("ArrestLocation","IncidentLocation","District","Post","Neighborhood","Location.1","X2010.Census.Neighborhoods","X2010.Census.Wards.Precincts","Zip.Codes","Longitude","Latitude")
+We need to know what type of data we are working with to appropriately work with out data.
 
-BPD_Arrests_March1 <- BPD_Arrests_March1 %>%
-  dplyr::select(-one_of(SpatialData_no_coordinates))
-
-colnames(BPD_Arrests_March1)
-```
-
-We'll only be analyzing the basic characteristics of the arrestee, as well as the date and time in which the arrest was made. We will not consider the nature of the crime, the time of arrest, or arrest number. In doing so, we'll risk creating a small number problem Let us remove that data.
-
-```{r}
-NatureTimeArrest <- c("IncidentOffense","Charge","ChargeDescription","ArrestTime","Arrest")
-BPD_Arrests_March1 <- BPD_Arrests_March1[,!colnames(BPD_Arrests_March1) %in% NatureTimeArrest]
-colnames(BPD_Arrests_March1)
-```
-
-What type of data are we working with? Rather than use the `class()` function for each individual variable, we can use `lapply()` to apply the `class()` function to all of our columns. `lapply()` and the other functions in the `apply()` family (see ?apply, ?sapply, ?vapply) are great for applying functions across objects. 
-
-**LRJ: Update this after using read_csv()**
+Rather than use the `class()` function for each individual variable, we can use `lapply()` to apply the `class()` function to all of our columns. This will save us `r length(colnames(BPD_Arrests_March1))-1` lines of code.
 
 ```{r}
 lapply(BPD_Arrests_March1[,1:length(colnames(BPD_Arrests_March1))],class)
 ```
 
-It looks like our `ArrestDate` and coordinate (`Latitude` & `Longitude`) variables are not specified correctly.
+It looks like none of our variables are not specified correctly. This makes sense since we read the columns in as character classes. 
 
 Using `as.Date`, let's make sure R recognizes that the data is in month-day-year format.
 
 ```{r}
-BPD_Arrests_March1$ArrestDate <- as.character(BPD_Arrests_March1$ArrestDate)
 BPD_Arrests_March1$ArrestDate <- as.Date(BPD_Arrests_March1$ArrestDate, "%m/%d/%y")
+```
+
+Now we do the same thing for our other variables, using the appropriate functions to designate appropriate classes for our data.
+
+```{r}
+BPD_Arrests_March1$Age <- as.integer(BPD_Arrests_March1$Age)
+BPD_Arrests_March1$Sex <- as.factor(BPD_Arrests_March1$Sex)
+BPD_Arrests_March1$Race <- as.factor(BPD_Arrests_March1$Race)
+```
+
+We need to know a bit more about the values in each column before going forward with assigning levels to our factors class columns.
+
+```{r}
+lapply(BPD_Arrests_March1[,1:length(colnames(BPD_Arrests_March1))],summary)
+```
+
+We are now ready to assign levels to our factor class columns. For this analysis, we will only use arrest and population data for the black and white populations in Baltimore. Our dataset still contains information for arrests of people of other races. We need to exclude this data. 
+
+```{r}
+BPD_Arrests_March1$Sex <- factor(BPD_Arrests_March1$Sex, levels = c("F", "M"), labels=c("Female", "Male"))
+BPD_Arrests_March1 <- BPD_Arrests_March1[BPD_Arrests_March1$Race=="B"|BPD_Arrests_March1$Race=="W",]
+BPD_Arrests_March1$Race <- factor(BPD_Arrests_March1$Race, levels = c("B", "W"), labels = c("Black", "White"))
 ```
 
 Let's look at our dataframe again.
@@ -327,8 +390,6 @@ We need to organize our dataframe to have a single column for age group and a si
 
 Our dataframe is still a bit messy. It is currently in wide format has two variables of interest in nearly every column. We need to get our dataframe into long format and remove the variable pairings. To do this we will have to collapse the Population data gathered across columns into a single column current combinations and use this column to create a dataframe with age group and gender columns.
 
-**We'll use the `melt()` function from the `reshape2` package to reorganize the data into long format. DELETE THIS**
-
 *WHY THE WARNING?*
 
 ```{r}
@@ -432,7 +493,7 @@ As you can see, after repeating the same data wrangling steps, the second datafr
 Let's combine demographic data from the two to create a dataframe from which to base our offset for our regression analysis. We will use `bind_rows` from the `dplyr` package. 
 
 ```{r}
-demographics <- bind_rows(molten.BaltimoreWhitePop,molten.BaltimoreBlackPop)
+demographics <- rbind(molten.BaltimoreWhitePop,molten.BaltimoreBlackPop)
 head(demographics)
 ```
 
@@ -442,7 +503,7 @@ Oops! We did some serious wrangling and have not checked our column classes. Let
 lapply(demographics[,1:length(colnames(demographics))],class)
 ```
 
-Although we set our `Race` columns as factors prior to using `bind_rows()`, the `Race`column in the new dataframe is a character class. Furthermore, our `Gender`, `AgeGroup`, and `Population` columns are incorrectly specificed as `character` classes.
+Although we set our `Race` columns as factors prior to using `rbind()`, the `Race`column in the new dataframe is a character class. Furthermore, our `Gender`, `AgeGroup`, and `Population` columns are incorrectly specificed as `character` classes.
 
 We are about to use `dplyr` and `ggplot` for exploratory data analysis. Now would be a good time to fix this. 
 
@@ -490,21 +551,7 @@ Our dataframes are different in the following ways:
 
 + Our demographic data has information for the Black and White population in Baltimore, whereas our arrest data includes arrests of people of other races. 
 
-Before grouping, we need to limit our analysis to the Black and White population. We also need to define age similarly for both dataframes. We need to do this while preserving the temporal information provided by the arrest data. 
-
-Let us remove rows from the arrest data that are outside the scope of this analysis. 
-
-```{r}
-summary(BPD_Arrests_March1$Race)
-```
-
-Let us ensure also that our labels are clear.
-
-```{r}
-BPD_Arrests_March1 <- BPD_Arrests_March1[BPD_Arrests_March1$Race=="B"|BPD_Arrests_March1$Race=="W",]
-BPD_Arrests_March1$Race <- factor(BPD_Arrests_March1$Race, levels = c("B","W"),labels = c("Black","White"))
-summary(BPD_Arrests_March1$Race)
-```
+Before grouping, we need to define age similarly for both dataframes. We need to do this while preserving the temporal information provided by the arrest data. 
 
 Now let's recode the age information provided by the arrest data by the age groups used in the demographic data. 
 
@@ -530,16 +577,10 @@ lapply(demographics, levels)
 
 How do our levels compare?
 
+#BOOKMARK
+
 ```{r}
 lapply(BPD_Arrests_March1, levels)
-```
-
-It looks like the `Sex` variable levels in the arrest data are inconsistent with the `Gender` variable levels in our demographic data.
-
-It's important that data be as clear as possible. Let us recode the `Sex` variable in the arrest to accomplish this. 
-
-```{r}
-BPD_Arrests_March1$Sex <- factor(BPD_Arrests_March1$Sex, levels = c("F","M"), labels = c("Female", "Male"))
 ```
 
 ```{r}
@@ -670,25 +711,19 @@ AnalysisDF %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=sum(Arres
   facet_grid(Gender~Race)
 ```
 
-Note the two signals in one of the younger age groups for white females. This could either be indicative of short term variation we should be aware of of a small number problem. Recall that the small number problem occurs when the numerator for rates is small and thus small changes in its count result in very large changes in a rate. We could check to see if these signals are a result of a small number problem. 
+Note the two signals in one of the younger age groups for white females. This could either be indicative of short term variation we should be aware of of a small number problem. Recall that the small number problem occurs when the numerator for a rate is small and thus small changes in its count could result in very large changes in the corresponding rate. We could check to see if these signals are a result of a small number problem. 
 
 ```{r}
 SignalDF <- AnalysisDF %>% filter(Year==2015:2017,Gender=="Female",Race=="White",AgeGroup=="20to24") %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% filter(r>=5e-04) %>% pull(Arrests)
-
 unstable_arrest_counts <- unique(SignalDF) 
 length(unstable_arrest_counts)
-
 theoretical_arrests<- 1:10
 theoretical_rate <- seq(1,10,by=1)/6744
 theoretical_rate_by_arrests <- as.data.frame(cbind(theoretical_arrests,theoretical_rate))
 theoretical_rate_by_arrests$theoretical_rate_ratio <- lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate
 theoretical_rate_by_arrests$theoretical_rate_ratio_inverse <- 1/(lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate)
-
-#gather so that two lines can be made
 theoretical_rate_by_arrests <- theoretical_rate_by_arrests %>% gather(key=Type,value=Value,theoretical_rate_ratio,theoretical_rate_ratio_inverse,-theoretical_rate,-theoretical_arrests)
-
 theoretical_rate_by_arrests <- theoretical_rate_by_arrests[complete.cases(theoretical_rate_by_arrests)==TRUE,]
-
 ggplot(theoretical_rate_by_arrests,aes(x=theoretical_arrests, y=Value,color=Type))+
   geom_point(size=1)+
   geom_line(size=1)+
@@ -716,19 +751,49 @@ Let's check our assumptions about the distribution of the outcome, arrest counts
 ```{r}
 arrests_n_per_day_poisson <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
 
-ggplot(data = arrests_n_per_day_poisson,
-       mapping = aes(sample = n)) + stat_qq(distribution = stats::qpois, dparams = list(lambda = mean(arrests_n_per_day_poisson$n)),size=2, alpha=0.1) + 
-  geom_line(data = data.frame(x = 10:173, n = 10:173), aes(x = x, y = n), colour = "red",alpha = 1,size=2) + ggtitle("QQ Plot, Poisson Distribution") + xlab("Theoretical Arrest Count") + ylab("Sample Arrest Count")
-```
-
-It looks like our counts per day do not fit the Poisson distribution
-
-```{r}
 arrests_n_per_day_nb <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
 
-ggplot(data = arrests_n_per_day_nb,
-       mapping = aes(sample = n)) + stat_qq(distribution = stats::qnbinom, dparams = list(mu = mean(arrests_n_per_day_nb$n), size=length(arrests_n_per_day_nb$n)),size=2, alpha=0.1) + 
-  geom_line(data = data.frame(x = 10:173, n = 10:173), aes(x = x, y = n), colour = "red",alpha = 1,size=2) + ggtitle("QQ Plot, Negative Binomal Distribution") + xlab("Theoretical Arrest Count") + ylab("Sample Arrest Count")
+ggplot(data = arrests_n_per_day_poisson,
+       mapping = aes(sample = n)) + stat_qq(distribution = stats::qpois, dparams = list(lambda = mean(arrests_n_per_day_poisson$n)),size=2.5, alpha=0.01,color="blue") + 
+  stat_qq_line(distribution = stats::qpois, dparams = list(lambda = mean(arrests_n_per_day_poisson$n)),size=1, alpha=1, color="blue")+ 
+  stat_qq(data = arrests_n_per_day_nb, distribution = stats::qnbinom, dparams = list(mu = mean(arrests_n_per_day_nb$n), size=length(arrests_n_per_day_nb$n)),size=2.5, alpha=0.01,color="red") + 
+  stat_qq_line(data = arrests_n_per_day_nb, distribution = stats::qnbinom, dparams = list(mu = mean(arrests_n_per_day_nb$n), size=length(arrests_n_per_day_nb$n)),size=1, alpha=1, color="red")+ 
+  labs(title="QQ Plot", subtitle="Poisson (in blue) and Negative Binomial (in red)", x="Theoretical Arrest Count", y="Sample Arrest Count")
+```
+
+```{r}
+arrests_n_per_day_hist <- AnalysisDF %>% group_by(ArrestDay) %>% summarise(n = sum(Arrests))
+
+raw_counts <- arrests_n_per_day_hist %>% group_by(n) %>% tally() %>% mutate(Distribution="Observed")
+colnames(raw_counts) <- c("n","count","Distribution")
+
+breaks_hist <- max(arrests_n_per_day_hist$n) - min(arrests_n_per_day_hist$n)
+
+poisson_sample <- as.data.frame(rpois(length(arrests_n_per_day_hist$n), mean(arrests_n_per_day_hist$n)))
+colnames(poisson_sample) <- c("sample_poisson")
+
+poisson_sample <- poisson_sample <- poisson_sample %>% group_by(sample_poisson) %>% tally() %>% mutate(Distribution="Poisson (Sample)")
+colnames(poisson_sample) <- c("n","count","Distribution")
+
+nb_sample <- as.data.frame(rnegbin(length(arrests_n_per_day_hist$n), mu=mean(arrests_n_per_day_hist$n), theta.ml(arrests_n_per_day_hist$n, mu=mean(arrests_n_per_day_hist$n, n=length(arrests_n_per_day_hist$n)))))
+colnames(nb_sample) <- c("sample_nb")
+
+nb_sample <- nb_sample %>% group_by(sample_nb) %>% tally() %>% mutate(Distribution="Negative Binomial (Sample)") 
+colnames(nb_sample) <- c("n","count","Distribution")
+
+dist_df <- as.data.frame(rbind(raw_counts, poisson_sample, nb_sample))
+dist_df$Distribution <- factor(dist_df$Distribution, levels = c("Observed", "Poisson (Sample)", "Negative Binomial (Sample)"), ordered = TRUE)
+
+ggplot(data=dist_df,aes(x=n,y=count, color=Distribution)) +
+  geom_line(size = 0.5) + 
+  scale_color_manual(values=c("black", "blue", "red")) + 
+  ggtitle("Distribution of Arrests Counts per Day") + 
+  xlab("Arrests") +
+  ylab("Days") +
+  theme(legend.position="bottom")
+
+sum(arrests_n_per_day_hist$n)
+length(BPD_Arrests_March1$ArrestDate)
 ```
 
 # Data analysis 
