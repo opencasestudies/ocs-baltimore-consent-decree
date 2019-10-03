@@ -92,6 +92,7 @@ library(gridExtra)
 library(lubridate)
 library(stringr)
 library(kableExtra)
+library(cowplot)
 ```
 
 **LRJ: I would separate the import of the two datasets.  First import and talk about the arrest data.  Then do the same with the population data after talking about how we need population data in order to work with arrest rates rather than counts of arrests.  In addition to talking about the dimension of each data frame, say a little bit (be brief) about what variables are in each.**
@@ -841,49 +842,25 @@ colnames(AnalysisDF)
 ```{r}
 MODELA1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-chi_squareA = sum(residuals(MODELA1, type = "pearson")^2); degrees_freedomA = MODELA1$df.residual;
-p_valueA = 1-pchisq(chi_squareA, degrees_freedomA)
-paste0("Pearson goodness of fit = ", round(chi_squareA,2), ", df = ", degrees_freedomA, ", p-value = ", round(p_valueA,10))
-
-MODELA2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline, data=AnalysisDF, offset(log(Population)))
-
-AIC_A <- AIC(MODELA2)
+AIC_A <- AIC(MODELA1)
 ```
 
 ```{r}
 MODELB1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-chi_squareB = sum(residuals(MODELB1, type = "pearson")^2); degrees_freedomB = MODELB1$df.residual;
-p_valueB = 1-pchisq(chi_squareB, degrees_freedomB)
-paste0("Pearson goodness of fit = ", round(chi_squareB,2), ", df = ", degrees_freedomB, ", p-value = ", round(p_valueB,10))
-
-MODELB2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday, data=AnalysisDF, offset(log(Population)))
-
-AIC_B <- AIC(MODELB2)
+AIC_B <- AIC(MODELB1)
 ```
 
 ```{r}
 MODELC1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-chi_squareC = sum(residuals(MODELC1, type = "pearson")^2); degrees_freedomC = MODELC1$df.residual;
-p_valueC = 1-pchisq(chi_squareC, degrees_freedomC)
-paste0("Pearson goodness of fit = ", round(chi_squareC,2), ", df = ", degrees_freedomC, ", p-value = ", round(p_valueC,10))
-
-MODELC2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, offset(log(Population)))
-
-AIC_C <- AIC(MODELC2)
+AIC_C <- AIC(MODELC1)
 ```
 
 ```{r}
 MODELD1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-chi_squareD = sum(residuals(MODELD1, type = "pearson")^2); degrees_freedomD = MODELD1$df.residual;
-p_valueD = 1-pchisq(chi_squareD, degrees_freedomD)
-paste0("Pearson goodness of fit = ", round(chi_squareD,2), ", df = ", degrees_freedomD, ", p-value = ", round(p_valueD,10))
-
-MODELD2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, offset(log(Population)))
-
-AIC_D <- AIC(MODELD2)
+AIC_D <- AIC(MODELD1)
 ```
 
 It appears that our quarter indicator variable better explains within year variation than does that season indicator variable.
@@ -891,13 +868,7 @@ It appears that our quarter indicator variable better explains within year varia
 ```{r}
 MODELE1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestMonth_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-chi_squareE = sum(residuals(MODELE1, type = "pearson")^2); degrees_freedomE = MODELE1$df.residual;
-p_valueE = 1-pchisq(chi_squareE, degrees_freedomE)
-paste0("Pearson goodness of fit = ", round(chi_squareE,2), ", df = ", degrees_freedomE, ", p-value = ", round(p_valueE,10))
-
-MODELE2 <- glm.nb(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestMonth_IV, data=AnalysisDF, offset(log(Population)))
-
-AIC_E <- AIC(MODELE2)
+AIC_E <- AIC(MODELE1)
 ```
 
 It appears that our month indicator variable explains within year variation moreso than our quarter indicator variable.
@@ -907,18 +878,14 @@ We will create one last model that will determine whether there is an interactio
 ```{r}
 MODELF1 <- glm(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-chi_squareF = sum(residuals(MODELF1, type = "pearson")^2); degrees_freedomF = MODELF1$df.residual;
-p_valueF = 1-pchisq(chi_squareF, degrees_freedomF)
-paste0("Pearson goodness of fit = ", round(chi_squareF,2), ", df = ", degrees_freedomF, ", p-value = ", round(p_valueF,10))
-
-MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, offset(log(Population)))
-
-AIC_F <- AIC(MODELF2)
+AIC_F <- AIC(MODELF1)
 ```
 
 It seems that we have ran out of covariates to explore. 
 
-Let us review the AIC values for our models. 
+Let us review the AIC values for our models. Let's create a table with the `kableExtra` package. 
+
+At the moment, we are not interested in creating a publishable quality table. Still, we would like the table we produce to be readily interpretable. That is, like all other visualization we create, we want it to be interpretable with little to no supplemental information. For the following table, we want to be able to easily identify the model with the lowest AIC value for future reference. 
 
 ```{r}
 model_names <- c("A",
@@ -937,13 +904,131 @@ model_AICs <- c(AIC_A,
 
 model_AICs <- round(model_AICs, 0)
 
-model_AICs_table<- cbind(model_names, model_AICs)
+model_AICs_table<- as.data.frame(cbind(model_names, model_AICs))
+
+sapply(model_AICs_table, class)
 
 colnames(model_AICs_table) <- c("Model","AIC")
 
+model_AICs_table$AIC <- as.numeric(as.character(model_AICs_table$AIC))
+
 kable(model_AICs_table) %>%
   kable_styling(bootstrap_options = c("bordered","condensed")) %>%
-  row_spec(6, bold = T, color = "white", background = "black")
+  row_spec(which(model_AICs_table$AIC==min(model_AICs_table$AIC)), bold = T, color = "white", background = "black") %>%
+  add_header_above(c("Model AIC Values"=length(colnames(model_AICs_table))))
+```
+
+selected model, check for overdispersion
+
+```{r}
+chi_squareF = sum(residuals(MODELF1, type = "pearson")^2); degrees_freedomF = MODELF1$df.residual;
+p_valueF = 1-pchisq(chi_squareF, degrees_freedomF)
+paste0("Pearson goodness of fit = ", round(chi_squareF,2), ", df = ", degrees_freedomF, ", p-value = ", round(p_valueF,10))
+```
+
+```{r}
+MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, offset(log(Population)))
+```
+
+```{r}
+regress_predict <- lm(AnalysisDF$Arrests ~ MODELF2$fitted.values)
+summary(regress_predict)
+cor(regress_predict$fitted.values, AnalysisDF$Arrests)
+observed_fitted <- as.data.frame(cbind(AnalysisDF$Arrests, regress_predict$fitted.values))
+colnames(observed_fitted) <- c("Expected","Modeled")
+observed_fitted$perfect_fit <- observed_fitted$Expected
+
+observed_fitted <- observed_fitted %>% rename("Line of Equality"= perfect_fit, "Observed | Model F"=Modeled) %>% gather(key = "Data", value = "Observed", -Expected)
+
+ggplot(observed_fitted, aes(x = Expected, y = Observed, color=Data)) + 
+  geom_smooth(size=0.5) + 
+  ggtitle("Fit, Model F2")
+```
+
+Let's evaluate leverage and influence in our selected model
+
+```{r}
+cooks_MODELF2 <- as.data.frame(cooks.distance(MODELF2))
+row_cooks_MODELF2 <- rownames(cooks_MODELF2)
+MODELF2_cooks <- as.data.frame(cbind(row_cooks_MODELF2, cooks_MODELF2))
+colnames(MODELF2_cooks) <- c("Row", "Cooks")
+sapply(MODELF2_cooks, class)
+MODELF2_cooks$Row <- as.numeric(as.character(MODELF2_cooks$Row))
+
+AnalysisDF$Row <-as.numeric(as.character(rownames(AnalysisDF)))
+
+AnalysisDF <- AnalysisDF %>% left_join(MODELF2_cooks)
+
+ggplot(data=AnalysisDF, aes(x=AgeGroup,y=Cooks,fill=AgeGroup)) +
+  geom_boxplot() +
+  facet_grid(Gender~Race) + 
+  ggtitle("Cooks Distance")+
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+ggplot(data=AnalysisDF, aes(y=log(Cooks),fill=AgeGroup)) +
+  geom_boxplot() +
+  facet_grid(Gender~Race) + 
+  ggtitle("log(Cooks Distance)")+
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+```{r}
+levels(AnalysisDF$AgeGroup)
+AnalysisDF$AgeGroup <- AnalysisDF$AgeGroup %>% fct_collapse(sixtyfive_and_over = c("65to74",
+                                                   "75to84",
+                                                   "85andover"))
+levels(AnalysisDF$AgeGroup)
+```
+
+```{r}
+which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+3*sd(log(AnalysisDF$Cooks)))
+
+which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks)))
+
+length(which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))))/length(AnalysisDF$ArrestDay)
+
+AnalysisDF_no_influential_points <- AnalysisDF[-which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))),]
+```
+
+```{r}
+MODELF3 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF_no_influential_points, offset(log(Population)))
+```
+
+```{r}
+regress_predict2 <- lm(AnalysisDF_no_influential_points$Arrests ~ MODELF3$fitted.values)
+summary(regress_predict2)
+cor(regress_predict2$fitted.values, AnalysisDF_no_influential_points$Arrests)
+observed_fitted2 <- as.data.frame(cbind(AnalysisDF_no_influential_points$Arrests, regress_predict2$fitted.values))
+colnames(observed_fitted2) <- c("Expected","Modeled")
+observed_fitted2$perfect_fit <- observed_fitted2$Expected
+
+observed_fitted2 <- observed_fitted2 %>% rename("Line of Equality"= perfect_fit, "Observed | Model F"=Modeled) %>% gather(key = "Data", value = "Observed", -Expected)
+```
+
+```{r}
+MODELF3_fit_plot <- ggplot(observed_fitted2, aes(x = Expected, y = Observed, color=Data)) +
+  geom_point(alpha=1/100) +
+  geom_smooth(size=2) +
+  ggtitle("Fit, Model F3") +
+  theme_minimal()
+
+top_density <- axis_canvas(MODELF3_fit_plot, axis = "x") +
+  geom_density(data=observed_fitted2, aes(x=Expected,alpha=0.25)) +
+  theme_void()
+
+right_density <- axis_canvas(MODELF3_fit_plot, axis = "y",coord_flip = TRUE) + 
+  geom_density(data=observed_fitted2, aes(x=Observed,fill=Data,alpha=0.25)) +
+  theme_void() + 
+  coord_flip()
+
+final_model_fit <- insert_xaxis_grob(MODELF3_fit_plot, top_density, position = "top")
+
+final_model_fit <- insert_yaxis_grob(final_model_fit, right_density, position = "right")
+
+ggdraw(final_model_fit)
+  
 ```
 
 `r round((exp(summary(MODELF2)$coefficients["RaceWhite:CD_lin_spline","Estimate"])*1000)-1000,2)` more white people were arrested per 1000 arrests made. 
