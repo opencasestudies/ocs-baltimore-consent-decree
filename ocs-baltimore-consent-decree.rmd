@@ -578,8 +578,6 @@ lapply(demographics, levels)
 
 How do our levels compare?
 
-#BOOKMARK
-
 ```{r}
 lapply(BPD_Arrests_March1, levels)
 ```
@@ -696,12 +694,23 @@ year <- AnalysisDF %>% filter(!(Year %in% 2019)) %>% group_by(year=ArrestYear) %
 grid.arrange(day,week,month,quarter,season,year,nrow=3,ncol=2,top="Plot 2")
 ```
 
-It looks like using month units works well for observing large and small scale variation. We will use unit to explore the data some more temporally. Note that our decision to use this unit is strictly for vizualization purposes and does not necessarily mean that any specific pattern exists for statistical purposes. 
+It looks like using month units works well for observing large and small scale variation. We will use this unit to explore the data some more temporally. Note that our decision to use this unit is strictly for vizualization purposes and does not necessarily mean that any specific pattern exists for statistical purposes. 
+
+Let's examine arrest counts and rates by group of interest. For now, let's not consider temporality.
 
 ```{r}
-AnalysisDF %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x=ArrestMonth, y=n,color=AgeGroup))+
-  geom_line(size=0.25,alpha=1)+
-  facet_grid(Gender~Race)
+AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
+  summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
+  unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
+  mutate(prop=n/sum(n)) %>%
+ggplot(aes(x=AgeGroup_,y=prop,fill=AgeGroup_))+
+  xlab("Age Group") +
+  ylab("Inverse Proportion") +
+  geom_bar(stat="identity",width = 0.5) +
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x.bottom = element_blank()) + 
+  facet_grid(Race_~Gender_) + 
+  ggtitle("Proportion of Population by Subpopulation")
 ```
 
 Our vizualizations for representing Black or male arrests appear to highlight clear differences in arrest counts by age group. Let us now use rates.
@@ -805,9 +814,6 @@ colnames(AnalysisDF)
 
 Let's create the linear spline for the approval of the consent decree.
 
-**DOES THIS METHOD WORK?** [LINK TO METHOD](https://faculty.washington.edu/heagerty/Courses/b571/homework/spline-tutorial.q)
-
-**WHY IS AIC NOT PRINTING PROPERLY?**
 ```{r}
 AnalysisDF$CD_lin_spline <- (AnalysisDF$ArrestDate - ymd("2017-04-07"))
 AnalysisDF$CD_lin_spline[AnalysisDF$CD_lin_spline<0] <- 0
@@ -906,9 +912,9 @@ model_AICs <- round(model_AICs, 0)
 
 model_AICs_table<- as.data.frame(cbind(model_names, model_AICs))
 
-sapply(model_AICs_table, class)
-
 colnames(model_AICs_table) <- c("Model","AIC")
+
+sapply(model_AICs_table, class)
 
 model_AICs_table$AIC <- as.numeric(as.character(model_AICs_table$AIC))
 
@@ -931,18 +937,50 @@ MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + Arre
 ```
 
 ```{r}
+LRTstat =2 *(logLik(MODELF2) -logLik(MODELF1))
+df = 1
+pval =1-pchisq(LRTstat, df)
+paste0("LRT test statistic = ", round(LRTstat,2), ", df = ", df, ", p-value = ", round(pval,5))
+```
+
+It appears that our NB model is more appropriate.
+
+```{r, message=FALSE}
 regress_predict <- lm(AnalysisDF$Arrests ~ MODELF2$fitted.values)
 summary(regress_predict)
 cor(regress_predict$fitted.values, AnalysisDF$Arrests)
+```
+
+```{r}
 observed_fitted <- as.data.frame(cbind(AnalysisDF$Arrests, regress_predict$fitted.values))
+
 colnames(observed_fitted) <- c("Expected","Modeled")
+
 observed_fitted$perfect_fit <- observed_fitted$Expected
 
-observed_fitted <- observed_fitted %>% rename("Line of Equality"= perfect_fit, "Observed | Model F"=Modeled) %>% gather(key = "Data", value = "Observed", -Expected)
+observed_fitted <- observed_fitted %>% rename("Line of Equality"= perfect_fit, "Observed | Model F2"=Modeled) %>% gather(key = "Data", value = "Observed", -Expected)
+```
 
-ggplot(observed_fitted, aes(x = Expected, y = Observed, color=Data)) + 
-  geom_smooth(size=0.5) + 
+```{R}
+MODELF2_fit_plot <- ggplot(observed_fitted, aes(x = Expected, y = Observed, color=Data)) +
+  geom_point(alpha=1/100) +
+  geom_smooth(size=2) + 
   ggtitle("Fit, Model F2")
+
+top_density_1 <- axis_canvas(MODELF2_fit_plot, axis = "x") +
+  geom_density(data=observed_fitted, aes(x=Expected,alpha=0.25)) +
+  theme_void()
+
+right_density_1 <- axis_canvas(MODELF2_fit_plot, axis = "y",coord_flip = TRUE) + 
+  geom_density(data=observed_fitted, aes(x=Observed,fill=Data,alpha=0.25)) +
+  theme_void() + 
+  coord_flip()
+
+final_model_fit_1 <- insert_xaxis_grob(MODELF2_fit_plot, top_density_1, position = "top")
+
+final_model_fit_1 <- insert_yaxis_grob(final_model_fit_1, right_density_1, position = "right")
+
+ggdraw(final_model_fit_1)
 ```
 
 Let's evaluate leverage and influence in our selected model
@@ -975,6 +1013,14 @@ ggplot(data=AnalysisDF, aes(y=log(Cooks),fill=AgeGroup)) +
 ```
 
 ```{r}
+AnalysisDF %>% group_by(AgeGroup) %>% summarise(Count=sum(Arrests)) %>%
+ggplot(aes(x=AgeGroup,y=Count,fill=AgeGroup)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+```{r}
 levels(AnalysisDF$AgeGroup)
 AnalysisDF$AgeGroup <- AnalysisDF$AgeGroup %>% fct_collapse(sixtyfive_and_over = c("65to74",
                                                    "75to84",
@@ -982,59 +1028,66 @@ AnalysisDF$AgeGroup <- AnalysisDF$AgeGroup %>% fct_collapse(sixtyfive_and_over =
 levels(AnalysisDF$AgeGroup)
 ```
 
+We need to determine whether the influential points, the points with high values of Cooks Distance, are because of some unmeasured confounder.
+
 ```{r}
-which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+3*sd(log(AnalysisDF$Cooks)))
+length(which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+3*sd(log(AnalysisDF$Cooks))))
 
-which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks)))
+length(which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2.5*sd(log(AnalysisDF$Cooks))))
 
-length(which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))))/length(AnalysisDF$ArrestDay)
+length(which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))))
 
-AnalysisDF_no_influential_points <- AnalysisDF[-which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))),]
+influential_points <- which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks)))
+
+length_cooks_2_sd <- length(which(log(AnalysisDF$Cooks)>= mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))))
+
+paste("The outliers identified make up about", round(length_cooks_2_sd*100/length(AnalysisDF$Cooks),2), "% of the observations in our data.")
 ```
-
+ 
 ```{r}
-MODELF3 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF_no_influential_points, offset(log(Population)))
-```
+MODELF2$call
 
-```{r}
-regress_predict2 <- lm(AnalysisDF_no_influential_points$Arrests ~ MODELF3$fitted.values)
-summary(regress_predict2)
-cor(regress_predict2$fitted.values, AnalysisDF_no_influential_points$Arrests)
-observed_fitted2 <- as.data.frame(cbind(AnalysisDF_no_influential_points$Arrests, regress_predict2$fitted.values))
-colnames(observed_fitted2) <- c("Expected","Modeled")
-observed_fitted2$perfect_fit <- observed_fitted2$Expected
+AnalysisDF[influential_points,] %>% group_by(Gender) %>%
+  summarise(median_cooks=median(Cooks)) %>%
+  ungroup() %>%
+  ggplot(aes(x=Gender,y=median_cooks,fill=Gender)) +
+  geom_bar(stat="identity")
 
-observed_fitted2 <- observed_fitted2 %>% rename("Line of Equality"= perfect_fit, "Observed | Model F"=Modeled) %>% gather(key = "Data", value = "Observed", -Expected)
-```
+AnalysisDF[influential_points,] %>% group_by(Race) %>%
+  summarise(median_cooks=median(Cooks)) %>%
+  ungroup() %>%
+  ggplot(aes(x=Race,y=median_cooks,fill=Race)) +
+  geom_bar(stat="identity")
 
-```{r}
-MODELF3_fit_plot <- ggplot(observed_fitted2, aes(x = Expected, y = Observed, color=Data)) +
-  geom_point(alpha=1/100) +
-  geom_smooth(size=2) +
-  ggtitle("Fit, Model F3") +
-  theme_minimal()
-
-top_density <- axis_canvas(MODELF3_fit_plot, axis = "x") +
-  geom_density(data=observed_fitted2, aes(x=Expected,alpha=0.25)) +
-  theme_void()
-
-right_density <- axis_canvas(MODELF3_fit_plot, axis = "y",coord_flip = TRUE) + 
-  geom_density(data=observed_fitted2, aes(x=Observed,fill=Data,alpha=0.25)) +
-  theme_void() + 
-  coord_flip()
-
-final_model_fit <- insert_xaxis_grob(MODELF3_fit_plot, top_density, position = "top")
-
-final_model_fit <- insert_yaxis_grob(final_model_fit, right_density, position = "right")
-
-ggdraw(final_model_fit)
+AnalysisDF[influential_points,] %>% group_by(AgeGroup) %>%
+  summarise(median_cooks=median(Cooks)) %>%
+  ungroup() %>%
+  ggplot(aes(x=AgeGroup,y=median_cooks,fill=AgeGroup)) +
+  geom_bar(stat="identity") + 
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x = element_blank())
   
-```
+AnalysisDF[influential_points,] %>% group_by(ArrestDate) %>%
+  summarise(median_cooks=median(Cooks)) %>%
+  ungroup() %>%
+  ggplot(aes(x=floor_date(ArrestDate,"month"),y=median_cooks)) +
+  geom_bar(stat="identity")
 
-`r round((exp(summary(MODELF2)$coefficients["RaceWhite:CD_lin_spline","Estimate"])*1000)-1000,2)` more white people were arrested per 1000 arrests made. 
+AnalysisDF[influential_points,] %>% group_by(ArrestWeekday) %>%
+  summarise(median_cooks=median(Cooks)) %>%
+  ungroup() %>%
+  ggplot(aes(x=ArrestWeekday,y=median_cooks,fill=ArrestWeekday)) +
+  geom_bar(stat="identity") + 
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x = element_blank())
+
+AnalysisDF[influential_points,] %>% group_by(ArrestMonth_IV) %>%
+  summarise(median_cooks=median(Cooks)) %>%
+  ungroup() %>%
+  ggplot(aes(x=ArrestMonth_IV,y=median_cooks,fill=ArrestMonth_IV)) +
+  geom_bar(stat="identity") + 
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x = element_blank())
+```
 
 # Summary of results
-
-The consent decree was followed by an increase in (approximately `r round((exp(summary(MODELF2)$coefficients["CD_lin_spline","Estimate"])*1000)-1000,2)` more arrests per 1000 arrests made prior to the consent decree. Despite this increase, people who were Black were less susceptible to arrest following the implementation of the consent decree. Following the implementation of the consent decree, there were approximately *Y* less arrests of Black people per 1000 arrests made prior to its implementation. 
-
-Ultimately, the consent decree led to an overall increase in arrest rates for Black and White people in Baltimore. The consent decree did, however, reduce the disparities in arrest rates between Black and White people in Baltimore.
