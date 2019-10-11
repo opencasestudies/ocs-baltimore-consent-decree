@@ -1323,30 +1323,12 @@ AnalysisDF$AgeGroup <- AnalysisDF$AgeGroup %>% fct_collapse(sixtyfive_and_over =
 levels(AnalysisDF$AgeGroup)
 ```
 
-We need to determine whether the influential points, the points with high values of Cooks Distance, are because of some unmeasured confounder.
-
-
-length(which(log(AnalysisDF$Cooks)> mean(log(AnalysisDF$Cooks))+3*sd(log(AnalysisDF$Cooks))))
-
-length(which(log(AnalysisDF$Cooks)> mean(log(AnalysisDF$Cooks))+2.5*sd(log(AnalysisDF$Cooks))))
-
-length(which(log(AnalysisDF$Cooks)> mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))))
-
-influential_points <- which(log(AnalysisDF$Cooks)> mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks)))
-
-length_cooks_2_sd <- length(which(log(AnalysisDF$Cooks)> mean(log(AnalysisDF$Cooks))+2*sd(log(AnalysisDF$Cooks))))
-
-paste("The outliers identified make up about",
-      round(length_cooks_2_sd*100/length(AnalysisDF$Cooks),2),
-      "% of the observations in our data.")
-
 ```{r}
 AnalysisDF <- AnalysisDF %>%
   ungroup() %>%
-  mutate(logCooks = log(Cooks),
-         diff_logCooks=abs(logCooks-mean(logCooks)),
-         threshold=sd(logCooks)*4,
-         Type=as.factor(ifelse(diff_logCooks>threshold,
+  mutate(diff_Cooks=abs(Cooks-mean(Cooks)),
+         threshold=sd(Cooks)*4,
+         Type=as.factor(ifelse(diff_Cooks>threshold,
                      "Influential Observation",
                      "Regular Observation")))
 summary(AnalysisDF$Type)
@@ -1384,10 +1366,10 @@ AnalysisDF %>%
 
 ```{r}
 AnalysisDF %>%
-  group_by(Type,ArrestMonth) %>%
+  group_by(Type,ArrestYear_IV) %>%
   summarise(count=n()) %>%
   mutate(prop=prop.table(count)) %>%
-  ggplot(aes(x=ArrestMonth,y=prop, fill=prop)) +
+  ggplot(aes(x=ArrestYear_IV,y=prop, fill=prop)) +
   geom_bar(stat="identity") +
   facet_grid(.~Type)
 ```
@@ -1401,7 +1383,7 @@ resid_check <- as.data.frame(c(resid_check, AnalysisDF))
 
 resid_check %>%
   ggplot(aes(x=fitted.value, y=residual)) +
-  geom_point(alpha=1/50,size=0.5,color="gray")+
+  geom_point(alpha=1/50,size=2,color="gray")+
   geom_smooth(size=2) +
   xlab("Fitted Value") +
   ylab("Residual") + 
@@ -1410,11 +1392,30 @@ resid_check %>%
 
 resid_check %>%
   ggplot(aes(x=fitted.value, y=residual)) +
-  geom_point(alpha=1,size=0.5,color="gray")+
+  geom_point(alpha=1/10,size=2,color="gray")+
   geom_smooth(size=0.5) +
   xlab("Fitted Value") +
   ylab("Residual") + 
   ggtitle("Fitted Values and Corresponding Residuals") + 
+  theme_minimal() +
+  facet_wrap(Type~.)
+
+resid_check %>%
+  ggplot(aes(x=fitted.value, y=Cooks)) +
+  geom_point(size=2,color="gray")+
+  geom_smooth(size=2) +
+  xlab("Fitted Value") +
+  ylab("Cooks") + 
+  ggtitle("Fitted Values and Cooks Distances") + 
+  theme_minimal()
+
+resid_check %>%
+  ggplot(aes(x=fitted.value, y=Cooks)) +
+  geom_point(size=2,color="gray")+
+  geom_smooth(size=2) +
+  xlab("Fitted Value") +
+  ylab("Cooks") + 
+  ggtitle("Fitted Values and Cooks Distances") + 
   theme_minimal() +
   facet_wrap(Type~.)
 ```
@@ -1437,6 +1438,29 @@ resid_check %>%
   group_by(Type) %>%
   mutate(ArrestRate=Arrests/Population) %>%
   summarise(AvgArrestRate=mean(ArrestRate), MedArrestRate=median(ArrestRate),MinArrestRate=min(ArrestRate),MaxArrestRate=max(ArrestRate))
+```
+
+```{r}
+resid_check %>%
+  ungroup() %>%
+  group_by(Type, Race, Gender, AgeGroup) %>%
+  mutate(ArrestRate=Arrests/Population) %>%
+  ggplot(aes(x=AgeGroup,y=ArrestRate, fill=Type)) +
+  geom_boxplot()
+
+resid_check %>%
+  ungroup() %>%
+  group_by(Type, Race, Gender, AgeGroup) %>%
+  mutate(ArrestRate=Arrests/Population) %>%
+  ggplot(aes(x=Gender,y=ArrestRate, fill=Type)) +
+  geom_boxplot()
+
+resid_check %>%
+  ungroup() %>%
+  group_by(Type, Race, Gender, AgeGroup) %>%
+  mutate(ArrestRate=Arrests/Population) %>%
+  ggplot(aes(x=Race,y=ArrestRate, fill=Type)) +
+  geom_boxplot()
 ```
 
 # Summary of results
