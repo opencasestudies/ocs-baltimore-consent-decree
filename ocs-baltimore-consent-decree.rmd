@@ -26,14 +26,19 @@ knitr::opts_chunk$set(echo = TRUE)
 + Need subheadings (should be able to go back to things easily)
 + Need more annotations
 + Determine where pander can make output more clean.
++ Discuss exclusion of data not used in this analysis ("freeze" the data)
 
 # Leah: READ ME
 
 **Michael**: I have included annotations such as this throughout thet case study. These were meant to highlight areas of where I may have a concern or am uncertain with how to proceed. 
 
+Search "Michael:Leah" to find comments I have left for you
+
 # Margaret: READ ME
 
 # Motivation 
+
+## Background
 
 On April 12th, Freddie Gray was arrested in West Baltimore for carrying a knife forbidden by law. A week after his arrest, Freddie Gray died. HIs death was attributed to injuries to the spinal cord. Six police officers present at the arrest were then suspended with pay and later had criminal charges filed against them. The Office of the Chief Medical Examiner determined that Freddie Gray's death was a result of a "high-energy injury" and that the death was a homicide by omission of care. As details of Freddie Gray's death became more publically known, protests ensued.
 
@@ -47,12 +52,15 @@ The goal of the consent decree is to ensure that the Baltimore Police Department
 
 ---
 
+## Analysis goal
 
 In this case study, we will examined whether the consent decree had an impact on arrest patterns. 
 
+## Learning objectives
+
 The learning objectives include data wrangling, data visualization, regular expressions, and Poisson regression. 
 
-**Michael**: These libraries need to be updated. 
+## Libraries
 
 The libraries used in this case study will be:
 
@@ -72,6 +80,8 @@ The libraries used in this case study will be:
 
 + `cowplot`, for extending ggplot functionality
 
++ `pander`, for printing formatted R output
+
 # What is the data? 
 
 The analysis uses data from two sources:
@@ -80,7 +90,11 @@ The analysis uses data from two sources:
 
 + [American Community Survey](https://www.census.gov/programs-surveys/acs)
 
+## Open Baltimore
+
 Open Baltimore is a web portal with Baltimore-specific data. The portal is city-managed and regularly updated. All arrest data from the Baltimore Police Department used in this analysis is made available on Open Baltimore [here](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
+
+## American Community Survey
 
 The American Community Survey is an ongoing survey by the US Census Bureau that captures demographic information for the United States and regions within. We will be using age, sex, and race data (tables B01001A and B01001B) for the county "Baltimore city, Maryland." This data is made available by the US Census Bureau [here](https://www.census.gov/data.html). 
 
@@ -100,7 +114,7 @@ library(tidyverse)
 library(pander)
 ```
 
-##Arrest Data
+##Arrest data
 
 We'll import the arrest data first. 
 
@@ -194,7 +208,7 @@ Let's check if our `tibble` has any problems.
 length(as.factor(as.data.frame(problems(BPD_Arrests))[,"col"]))
 ```
 
-#$ Demographia Data
+## Demographic Data
 
 We need population data to work with arrest rates rather than arrest counts.
 
@@ -254,6 +268,8 @@ length(as.factor(as.data.frame(problems(BaltimoreBlackPop17))[,"col"]))
 
 `read_csv()` did not recognize any problems while loading the population data. Given that the above population dataframes all follow a standardized format, it should not be of too much concern. This, however, does not mean that they do not require wrangling. We'll see later that the population dataframes, although much cleaner than our arrest dataframes, are not useful in their current state. 
 
+## Size of dataframes
+
 We then look at the dimensions of each dataframe to get a handle on how large and complicated the dataframes are. 
 
 The dataframe for arrests in Baltimore has `r dim(BPD_Arrests)[1]` rows and `r dim(BPD_Arrests)[2]` columns.
@@ -269,7 +285,19 @@ dim(BaltimoreWhitePop14)==dim(BaltimoreWhitePop17)
 dim(BaltimoreWhitePop14)==dim(BaltimoreBlackPop17)
 ```
 
-Let us take a look at how these dataframes look. Applying functions that print output to multiple dataframes can produce a lot of output. We only need to look at one of the dataframes since they are identically formatted. We will use the last dataframe we produced since it would likely be most unlike the first dataframe we produced if there was a systematic error.
+The dataframes for the Baltimore populations each have `r dim(BaltimoreBlackPop14)[1]` rows and `r dim(BaltimoreBlackPop14)[2]` columns.
+
+```{r}
+dim(BaltimoreBlackPop14)
+```
+
+## Contents of dataframes
+
+Let us take a look at what these dataframes contain. Applying functions that print output to multiple dataframes can produce a lot of output. We only need to look at one of the dataframes since they are identically formatted. We will use the last dataframe we produced since it would likely be most unlike the first dataframe we produced if there was a systematic error.
+
+```{r}
+head(BPD_Arrests)
+```
 
 ```{r}
 head(BaltimoreBlackPop17)
@@ -293,7 +321,9 @@ For our poisson regression, we need each of these components to be grouped in su
 
 Let us create a quick workflow.
 
-**Workflow**
+## Workflow 
+
+**Michael**: Update the workflow below
 
 -----
 
@@ -918,8 +948,8 @@ Our data is currently grouped by date in `%m/%d/%y` format. Given the number of 
 
 ```{r, message=FALSE}
 AnalysisDF %>% group_by(ArrestDate) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x = ArrestDate, y=n))+
-  geom_point(size=0.1)+
-  geom_smooth(color="red")+
+  geom_point(size=0.1, color="gray")+
+  geom_smooth(color="black", span=0.1)+
   xlab('')+
   ylab('Arrests')+
   ggtitle("Arrests/Day in Baltimore")+
@@ -927,13 +957,13 @@ AnalysisDF %>% group_by(ArrestDate) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x 
   theme_minimal()
 ```
 
-The death of **Michael** Brown (August of 2014) appears to immediately precede sharp declines in the number of arrests. Interestingly, the death of Freddie Gray (April of 2015) does not appear to correspond to a decrease in daily arrests. 
+The death of Michael Brown (August of 2014) appears to immediately precede sharp declines in the number of arrests. Interestingly, the death of Freddie Gray (April of 2015) does not appear to correspond to a decrease in daily arrests. Overall, there is a long term decrease in arrests over time.
 
 `geom_smooth` can often oversmooth our data, reducing its variance, meaning we may not be able to see any small scale variation that could be relevant for our analysis. 
 
 We can use `gridExtra` to place all these plots in a single plot. This makes comparisons a bit easier. 
 
-2019 has incomplete data, let's exclude it for now. 
+2019 has incomplete data, let's exclude it for now. **Michael**: Fix the code below so that 2019 is included. 
 
 ```{r}
 day <- AnalysisDF %>%
@@ -988,15 +1018,58 @@ year <- AnalysisDF %>%
   geom_line(color="orange")
 ```
 
+**Michael**: Fix the title to the plot below.
+
 ```{r}
 grid.arrange(day,week,month,quarter,season,year,nrow=3,ncol=2,top="Plot 2")
 ```
 
 It looks like using month units works well for observing large and small scale variation. We will use this unit to explore the data some more temporally. Note that our decision to use this unit is strictly for vizualization purposes and does not necessarily mean that any specific pattern exists for statistical purposes. 
 
-Let's examine arrest counts and rates by group of interest. For now, let's not consider temporality.
+Let's examine our arrest data by group of interest. Because our outcome of interest will be a rate, we need to identify small subpopulations. These small can make some of our model coefficients very unstable, especially given a high number of degrees of freedom.
+
+We create three plots that summarize the proportion of the population that falls under each category in our three categorical variables of interest. Then we create a plot that summarizes the proportion of the population that falls under a unique combination of these three categorical variables. 
+
+The arrests data appears to be disproportionately young, black, and male. 
 
 ```{r}
+
+AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
+  summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
+  unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
+  mutate(prop=n/sum(n)) %>%
+ggplot(aes(x=AgeGroup_,y=prop,fill=AgeGroup_)) +
+  xlab("Age Group") +
+  ylab("Inverse Proportion") +
+  geom_bar(stat="identity",width = 0.5) +
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x.bottom = element_blank()) + 
+  ggtitle(label = "Proportion of Population by Subpopulation", subtitle = "By Age Group")
+
+AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
+  summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
+  unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
+  mutate(prop=n/sum(n)) %>%
+ggplot(aes(x=Gender_,y=prop,fill=Gender_)) +
+  xlab("Gender") +
+  ylab("Inverse Proportion") +
+  geom_bar(stat="identity",width = 0.5) +
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x.bottom = element_blank()) + 
+  ggtitle(label = "Proportion of Population by Subpopulation", subtitle = "By Gender")
+
+AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
+  summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
+  unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
+  mutate(prop=n/sum(n)) %>%
+ggplot(aes(x=Race_,y=prop,fill=Race_)) +
+  xlab("Race") +
+  ylab("Inverse Proportion") +
+  geom_bar(stat="identity",width = 0.5) +
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x.bottom = element_blank()) + 
+  ggtitle(label = "Proportion of Population by Subpopulation", subtitle = "By Race")
+
 AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
   summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
   unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
@@ -1011,7 +1084,15 @@ ggplot(aes(x=AgeGroup_,y=prop,fill=AgeGroup_)) +
   ggtitle("Proportion of Population by Subpopulation")
 ```
 
-Our vizualizations for representing Black or male arrests appear to highlight clear differences in arrest counts by age group. Let us now use rates.
+We've explored the data temporally and non-temporally. We've recognized that the elderly form a very small proportion of the arrests in our data.
+
+The age groups we've defined may be problematic later in our analysis in part because of this.
+
+Let's explore this in more detail.
+
+By looking at how age group-specific rates vary over time, we can take advantage of observable instability that may exist in those rates to identify potential problems in our statistical analyses. 
+
+We need to examine noise and recognize any potential signals in our rates. The presence of noise is indicative of random error, which should be expected in the presence of many observations. Lack of noise is indicative of little random error or few observations. Signals should be examined when possible, as they may indicate either the presence of an unaccounted for covariate or be spurious if the numerator in our rates (arrests) is small in comparison to the denominator (population size).  
 
 ```{r}
 AnalysisDF %>%
@@ -1026,28 +1107,33 @@ AnalysisDF %>%
 
 **Michael**: A better explanation of the code and statistics involved would be great.
 
-Note the two signals in one of the younger age groups for white females. This could either be indicative of short term variation we should be aware of of a small number problem. Recall that the small number problem occurs when the numerator for a rate is small and thus small changes in its count could result in very large changes in the corresponding rate. We could check to see if these signals are a result of a small number problem. 
+Note the three signals in one of the younger age groups for white females. Recall that signals like these may occur when the numerator for a rate is relatively small compared to the denominator and thus small changes in the numerator result in very large changes in the corresponding rate. These signals could also be because of some unaccounted for covariate (in this case an events related to a large amount of arrests such as unrest at a sporting event).
+
+We could check to see if these signals are spurious or not by creating a plot that demonstrates the potential change in a rate corresponding to a one unit increase in the numerator. 
+
+We subset the data to ensure our examination is limited to young white females and then use the `lag()` function to create a column for a dataframe that create a theoretical rate ratio comparing a rate with a one unit increase in the numerator to a rate without a one unit increase in the numerator. A column with the inverse of this value is created. We then insert lines representing the numerator in the three signals we identified to visually examine how unstable these rates are.
+
+In the plot created, a rate ratio close to one indicates that the rate does not change much with a one unit increase in the numerator. As the rate ratio departs from one, a one unit change in the numerator has a larger effect on the change in rate.
+
+Our plot shows that the three signals we identified have low rate ratios, meaning the signals are likely spurious. This may be an issue later in our analysis. Had the rate ratios of these signals been comparable to other points, our model would need an additional covariate that explains the variation observed. 
 
 ```{r}
 SignalDF <- AnalysisDF %>% filter(Year==2015|Year==2016|Year==2017,Gender=="Female",Race=="White",AgeGroup=="20to24") %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% filter(r>=5e-04) %>% pull(Arrests)
 unstable_arrest_counts <- unique(SignalDF) 
 length(unstable_arrest_counts)
-theoretical_arrests<- 1:10
-theoretical_rate <- seq(1,10,by=1)/6744
+theoretical_arrests<- 1:100
+theoretical_rate <- seq(1,100,by=1)/6744
 theoretical_rate_by_arrests <- as.data.frame(cbind(theoretical_arrests,theoretical_rate))
 theoretical_rate_by_arrests$theoretical_rate_ratio <- lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate
-theoretical_rate_by_arrests$theoretical_rate_ratio_inverse <- 1/(lag(theoretical_rate_by_arrests$theoretical_rate)/theoretical_rate_by_arrests$theoretical_rate)
-theoretical_rate_by_arrests <- theoretical_rate_by_arrests %>% gather(key=Type,value=Value,theoretical_rate_ratio,theoretical_rate_ratio_inverse,-theoretical_rate,-theoretical_arrests)
 theoretical_rate_by_arrests <- theoretical_rate_by_arrests[complete.cases(theoretical_rate_by_arrests)==TRUE,]
-ggplot(theoretical_rate_by_arrests,aes(x=theoretical_arrests, y=Value,color=Type))+
-  geom_point(size=1)+
-  geom_line(size=1)+
-  geom_vline(xintercept=unstable_arrest_counts[1],color="black")
+ggplot(theoretical_rate_by_arrests,aes(x=theoretical_arrests, y=theoretical_rate_ratio))+
+  geom_hline(yintercept = 1.0, color="red")+
+  geom_vline(xintercept=unstable_arrest_counts[1:length(unstable_arrest_counts)],color="gray", linetype="dashed")+
+  theme_minimal() + 
+  geom_point(size=1)
 ```
 
-As you can see, the arrest counts are very low. It is likely that the signal found in the plot we made was just a result of unstable rates.
-
-Weekdays cannot be linearly plotted, meaning we need to examine arrest counts by weekdays separately.
+To finish exploring explanatory variables, we'll examine arrest counts and rates by weekday.
 
 ```{r}
 AnalysisDF %>%
@@ -1066,7 +1152,9 @@ AnalysisDF %>%
   facet_grid(Gender~Race)
 ```
 
-Let's check our assumptions about the distribution of the outcome, arrest counts.
+Now that we have a general idea of how our outcome varies across explanatory variables, let's examine the distribution of the outcome, arrest counts.
+
+We do this by creating plotting our data along with random samples from a Poisson and negative binomial distribution of equal size and mean. Our plots suggests that our outcome variable, unadjusted, may reflect a negative binomial distribution. This may change after we adjust for covariates.
 
 ```{r}
 arrests_n_per_day_hist <- AnalysisDF %>%
@@ -1111,12 +1199,13 @@ ggplot(data=dist_df,aes(x=n,y=count, color=Distribution)) +
   xlab("Arrests") +
   ylab("Days") +
   theme(legend.position="bottom")
-
-sum(arrests_n_per_day_hist$n)
-length(BPD_Arrests$ArrestDate)
 ```
 
-**Michael**: I found [Hadley's take on the warning messages](https://github.com/tidyverse/tibble/issues/450). Hadley's response highlights a problem in R that is a result of conservative programming . **How should we proceed with these warning messages.**
+**Michael:Leah**: I found [Hadley's take on the warning messages](https://github.com/tidyverse/tibble/issues/450). Hadley's response highlights a problem in R that is a result of conservative programming . **How should we proceed with these warning messages? They appear multiple times throughout the markdown document.**
+
+We can examine the observed distribution robustly by creating quantile-quantile (Q-Q) plots. 
+
+Our Q-Q plots suggest that the Poisson distribution fits the unadjusted observed distribution poorly compared to the negative binomial distribution.
 
 ```{r}
 raw_counts_qntile<- quantile(raw_counts$n, seq(0, 1, by=.001))
@@ -1146,6 +1235,8 @@ ggplot(data = QQdf, aes(x=Observed, y=NB)) +
   theme_minimal() +
   ggtitle("Negative Binomial : Observed QQ Plot")
 ```
+
+**Michael** Need to add a small paragraph here summarizing what we accomplished in this section. 
 
 # Data analysis 
 
@@ -1227,7 +1318,7 @@ We will create one last model that will determine whether there is an interactio
 ```{r}
 MODELF1 <- glm(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
 
-AIC_F <- AIC(MODELF1)
+AIC_F1 <- AIC(MODELF1)
 ```
 
 It seems that we have ran out of covariates to explore. 
@@ -1242,14 +1333,14 @@ model_names <- c("A",
                  "C",
                  "D",
                  "E",
-                 "F")
+                 "F1")
 
 model_AICs <- c(AIC_A,
                 AIC_B,
                 AIC_C,
                 AIC_D,
                 AIC_E,
-                AIC_F)
+                AIC_F1)
 
 model_AICs <- round(model_AICs, 0)
 
@@ -1262,7 +1353,9 @@ sapply(model_AICs_table, class)
 model_AICs_table$AIC <- as.numeric(as.character(model_AICs_table$AIC))
 ```
 
-**Michael**: Insert paragraph about the models here. This should complement the table below. 
+Now that we've created several models, we can compare their appropriateness with by comparing their Akaike's Information Criterion (AIC) values.
+
+We can use `kable()` from the `kableExtra` package to build a more useful table. The table we create indicates that Model F1 is the most appropriate of the 6 models we examined. 
 
 ```{r}
 
@@ -1272,7 +1365,11 @@ kable(model_AICs_table) %>%
   add_header_above(c("AIC Values, Models A-F"=length(colnames(model_AICs_table))))
 ```
 
-selected model, check for overdispersion
+As with all regression analyses, we need to be careful when we select a model. Our model may fit the data better than other models but violate one or more of the assumptions we've made in the process. In this case, any inferences made would be based on misconceptions. Because we are interested in inference, we cannot afford to make this mistake.
+
+Let us check whether Model F1 satisfies the quintessential assumption of Poisson regression: that our outcome data reflect a Poisson distribution. 
+
+We can do this with a chi-squared test. Output suggests that Model F1 does not satisfy the necessary distribution.
 
 ```{r}
 chi_squareF = sum(residuals(MODELF1, type = "pearson")^2); degrees_freedomF = MODELF1$df.residual;
@@ -1280,9 +1377,15 @@ p_valueF = 1-pchisq(chi_squareF, degrees_freedomF)
 paste0("Pearson goodness of fit = ", round(chi_squareF,2), ", df = ", degrees_freedomF, ", p-value = ", round(p_valueF,10))
 ```
 
+We can relax the assumptions made by Poisson regression by using negative binomial regression. Negative binomial regression is similar to Poisson regression in many ways, but is less stringent about the relationship between the mean and the variance. 
+
+Let's fit a negative binomial model with `glm.nb()` by the `MASS` package. Note that we are using the same covariates. We will name this new model Model F2 so that we can later recognize that this model has the same covariates as Model F1. 
+
 ```{r}
 MODELF2 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, offset(log(Population)))
 ```
+
+We can compare the Poisson and negative binomial models we've created using a likelihood ratio test. The output below suggests that our negative binimial model fits the distribution of our outcome better. 
 
 ```{r}
 LRTstat =2 *(logLik(MODELF2) -logLik(MODELF1))
@@ -1291,7 +1394,15 @@ pval =1-pchisq(LRTstat, df)
 paste0("LRT test statistic = ", round(LRTstat,2), ", df = ", df, ", p-value = ", round(pval,5))
 ```
 
-It appears that our NB model is more appropriate.
+Model F2, according to its AIC value, also is a more appropriate model than Model F1. 
+
+```{r}
+AIC(MODELF2) - AIC(MODELF1)
+```
+
+Now that we have selected a model, we can examine how well it compares to our actual values and determine where it fits well and where it fits poorly. 
+
+First, we'll determine the coefficient of correlation between our actual and fitted arrest counts. 
 
 ```{r, message=FALSE}
 regress_predict <- lm(AnalysisDF$Arrests ~ MODELF2$fitted.values)
@@ -1299,43 +1410,116 @@ summary(regress_predict)
 cor(MODELF2$fitted.values, AnalysisDF$Arrests)
 ```
 
+Then, we'll create a dataframe of our actual and fitted arrest counts. 
+
 ```{r}
-observed_fitted <- as.data.frame(cbind(AnalysisDF$Arrests, MODELF2$fitted.values))
+actual_fitted <- as.data.frame(cbind(AnalysisDF$Arrests, MODELF2$fitted.values))
 
-colnames(observed_fitted) <- c("Expected","Modeled")
+colnames(actual_fitted) <- c("Expected","Fitted")
 
-observed_fitted$perfect_fit <- observed_fitted$Expected
+actual_fitted$perfect_fit <- actual_fitted$Expected
 
-observed_fitted <- observed_fitted %>% rename("Line of Equality"= perfect_fit, "Observed | Model F2"=Modeled) %>% gather(key = "Data", value = "Observed", -Expected)
+actual_fitted <- actual_fitted %>%
+  rename("Perfect Fit"= perfect_fit, "Fitted | Model F2"=Fitted) %>%
+  gather(key = "Line", value = "Observed", -Expected) %>%
+  select("Line", "Expected", "Observed")
+
+head(actual_fitted)
 ```
 
+Lastly, we'll create a plot of the actual and fitted arrest counts. We have many points, and any plot of the points we can create can therefore be substantially improved with the addition of a density plot of values across each axis. We can do this with `axiscanvas()` and `insert_*axis_grob()` from `cowplot`.
 
-**Michael**: Improve the readability of code and objects below. 
+```{r}
+MODELF2_fit_plot <- ggplot(actual_fitted, aes(x = Expected, y = Observed, color=Line)) +
+  geom_smooth(size=2) +
+  ggtitle(label = "Fit, Model F2") +
+  theme_minimal()
 
-```{R}
-MODELF2_fit_plot <- ggplot(observed_fitted, aes(x = Expected, y = Observed, color=Data)) +
-  geom_point(alpha=1/100) +
-  geom_smooth(size=2) + 
-  ggtitle("Fit, Model F2")
-
-top_density_1 <- axis_canvas(MODELF2_fit_plot, axis = "x") +
-  geom_density(data=observed_fitted, aes(x=Expected,alpha=0.25)) +
+top_density_1 <- axis_canvas(MODELF2_fit_plot, axis = "x", coord_flip = TRUE) +
+  geom_boxplot(data=actual_fitted, aes(y=Expected, fill=Line), outlier.size = 0.5, outlier.shape = 19) +
+  coord_flip() + 
   theme_void()
 
-right_density_1 <- axis_canvas(MODELF2_fit_plot, axis = "y",coord_flip = TRUE) + 
-  geom_density(data=observed_fitted, aes(x=Observed,fill=Data,alpha=0.25)) +
-  theme_void() + 
-  coord_flip()
+right_density_1 <- axis_canvas(MODELF2_fit_plot, axis = "y",coord_flip = FALSE) + 
+  geom_boxplot(data=actual_fitted, aes(y=Observed, fill=Line), outlier.size = 0.5, outlier.shape = 19) +
+  geom_jitter(width = 0.5, color="black") +
+  theme_void()
 
 final_model_fit_1 <- insert_xaxis_grob(MODELF2_fit_plot, top_density_1, position = "top")
 
 final_model_fit_1 <- insert_yaxis_grob(final_model_fit_1, right_density_1, position = "right")
+```
 
+We then print the plot we've created with `ggdraw()` by the `cowplot` package. 
+
+The plot we've created shows that a small number of points is impacting our model.
+
+```{r}
 ggdraw(final_model_fit_1)
 ```
 
-Let's evaluate leverage and influence in our selected model
+```{r}
+MODELF2_fit_plot_zoomed <- ggplot(actual_fitted, aes(x = Expected, y = Observed, color=Line)) +
+  geom_smooth(size=2) + 
+  xlim(0, 15) + 
+  ylim(0, 15) +
+  ggtitle(label = "Fit, Model F2 (Zoomed-in)") +
+  theme_minimal()
 
+top_density_1_zoomed <- axis_canvas(MODELF2_fit_plot_zoomed, axis = "x", coord_flip = TRUE) +
+  geom_boxplot(data=actual_fitted, aes(y=Expected), outlier.size = 0.5, outlier.shape = 19) +
+  ylim(0, 15) + 
+  coord_flip() + 
+  theme_void()
+
+right_density_1_zoomed <- axis_canvas(MODELF2_fit_plot_zoomed, axis = "y",coord_flip = FALSE) + 
+  geom_boxplot(data=actual_fitted, aes(y=Observed,fill=Line), outlier.size = 0.5, outlier.shape = 19) +
+  ylim(0, 15) + 
+  theme_void()
+
+final_model_fit_1_zoomed <- insert_xaxis_grob(MODELF2_fit_plot_zoomed, top_density_1_zoomed, position = "top")
+
+final_model_fit_1_zoomed <- insert_yaxis_grob(final_model_fit_1_zoomed, right_density_1_zoomed, position = "right")
+
+ggdraw(final_model_fit_1_zoomed)
+```
+
+It appears that a few outlier points may be very influential to our model. Let's revisit some of the exploratory plots we created.
+
+It appears that we have very few observations for our two oldest age groups. 
+
+```{r}
+AnalysisDF %>% group_by(AgeGroup) %>% summarise(Count=sum(Arrests)) %>%
+ggplot(aes(x=AgeGroup,y=Count,fill=AgeGroup)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+Let's combine these two age groups.
+
+```{r}
+levels(AnalysisDF$AgeGroup)
+AnalysisDF$AgeGroup <- AnalysisDF$AgeGroup %>% fct_collapse("65+" = c("65to74",
+                                                   "75to84",
+                                                   "85andover"))
+levels(AnalysisDF$AgeGroup)
+```
+
+We now have more observations for our oldest group. 
+
+```{r}
+AnalysisDF %>% group_by(AgeGroup) %>% summarise(Count=sum(Arrests)) %>%
+ggplot(aes(x=AgeGroup,y=Count,fill=AgeGroup)) + 
+  geom_bar(stat="identity") + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+Let's evaluate the Cook's distance value of points to determine whether this is of systematic or spurious origin. 
+
+We create a dataframe with an identification number for each point and each point's corresponding Cook'S distance value. This is appended to our original dataframe.
+ 
 ```{r}
 cooks_MODELF2 <- as.data.frame(cooks.distance(MODELF2))
 row_cooks_MODELF2 <- rownames(cooks_MODELF2)
@@ -1347,36 +1531,32 @@ MODELF2_cooks$Row <- as.numeric(as.character(MODELF2_cooks$Row))
 AnalysisDF$Row <-as.numeric(as.character(rownames(AnalysisDF)))
 
 AnalysisDF <- AnalysisDF %>% left_join(MODELF2_cooks)
-
-ggplot(data=AnalysisDF, aes(x=AgeGroup,y=Cooks,fill=AgeGroup)) +
-  geom_boxplot() +
-  facet_grid(Gender~Race) + 
-  ggtitle("Cooks Distance")+
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
-
-ggplot(data=AnalysisDF, aes(y=log(Cooks),fill=AgeGroup)) +
-  geom_boxplot() +
-  facet_grid(Gender~Race) + 
-  ggtitle("log(Cooks Distance)")+
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
 ```
 
-```{r}
-AnalysisDF %>% group_by(AgeGroup) %>% summarise(Count=sum(Arrests)) %>%
-ggplot(aes(x=AgeGroup,y=Count,fill=AgeGroup)) + 
-  geom_bar(stat="identity") + 
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
-```
+Now that we've updated our dataframe to include the Cook's distance value of each observation, we can determine whether our influential observations are systematic and which factors explain systematic influence over our model. 
+
+Creating an independent plot of Cook's distance values for each variable of interest can create a lot of output and may be very difficult for interpretation later. Although we can return to using the `gridExtra` package to create a plot of plots, we'll use `cowplot` instead. The package we use in this case is purely a matter of personal preference. This situation is pretty common when using R. In fact, many packages can produce similar, if not identical, output.
+
+In this case, we are choosing to use `cowplot` over `gridExtra` simply as a matter of personal preference. Were our goal to produce the boxplots above, we would use `cowplot`. This is because `cowplot` has functions such as `insert_*axis_grob` which allow multiple plots to use the same axes as the main plot. These functions aren't necessary for plots that can stand alone. Because we are creating a plot of plots that can stand alone, a goal that both the `gridExtra` and `cowplot` packages can satisfy, our package choice is mostly irrelevant.
 
 ```{r}
-levels(AnalysisDF$AgeGroup)
-AnalysisDF$AgeGroup <- AnalysisDF$AgeGroup %>% fct_collapse(sixtyfive_and_over = c("65to74",
-                                                   "75to84",
-                                                   "85andover"))
-levels(AnalysisDF$AgeGroup)
+AgeGroup_no_log <- ggplot(data=AnalysisDF, aes(x=AgeGroup,y=Cooks,fill=AgeGroup)) +
+  geom_boxplot() +
+  facet_grid(Gender~Race) + 
+  ggtitle(label = "Cooks Distance", subtitle = "By Age Group")+
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())
+
+AgeGroup_log <- ggplot(data=AnalysisDF, aes(y=log(Cooks),fill=AgeGroup)) +
+  geom_boxplot() +
+  facet_grid(Gender~Race) + 
+  ggtitle(label="log(Cooks Distance)", subtitle = "By Age Group")+
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())
+
+plot_grid(AgeGroup_no_log,AgeGroup_log, labels=c("A","B"))
 ```
 
 ```{r}
@@ -1534,16 +1714,22 @@ MODELG1 <- glm(Arrests ~ Gender + AgeGroup + ArrestYear_IV + ArrestWeekday + Arr
 AIC_G1 <- AIC(MODELG1)
 ```
 
+As in the previous models we created, we'll conduct a chi-squared test to determine whether there may be overdispersion. The output suggests that there is overdispersion. 
+
 ```{r}
 chi_squareG = sum(residuals(MODELG1, type = "pearson")^2); degrees_freedomG = MODELG1$df.residual;
 p_valueG = 1-pchisq(chi_squareG, degrees_freedomG)
 paste0("Pearson goodness of fit = ", round(chi_squareG,2), ", df = ", degrees_freedomG, ", p-value = ", round(p_valueG,10))
 ```
 
+Again, we'll fit a negative binomial model to relax our assumptions about the mean and variance.
+
 ```{r}
 MODELG2 <- glm.nb(Arrests ~ Gender + AgeGroup + ArrestYear_IV + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, offset(log(Population)))
 AIC_G2 <- AIC(MODELG2)
 ```
+
+Again, we can compare the Poisson and negative binomial models using a likelihood ration test. The output suggests that the overdispersion was accounted for with the negative binomial model.
 
 ```{r}
 LRTstat =2 *(logLik(MODELG2) -logLik(MODELG1))
@@ -1552,11 +1738,23 @@ pval =1-pchisq(LRTstat, df)
 paste0("LRT test statistic = ", round(LRTstat,2), ", df = ", df, ", p-value = ", round(pval,5))
 ```
 
+We can compare our two most recent negative binomial models with and without a yearly indicator variable with their AIC values. The inclusion of a yearly indicator variable in place of a daily variable appears to be more appropriate. 
+
 ```{r}
 AIC_F2 <- AIC(MODELF2)
 AIC_F2
 AIC_G2
 ```
+
+We can use `summary()` to obtain model coefficients and corresponding measures of uncertainty. 
+
+```{r}
+summary(MODELG2)
+```
+
+Because of the complexity of our model, a lot of output is produced. However, the output is a bit messy. 
+
+Let's use `pander()` from the `pander` package to neatly organize our output.
 
 ```{r}
 pander(summary(MODELG2))
