@@ -25,7 +25,6 @@ knitr::opts_chunk$set(echo = TRUE)
 + Describe each dataset after loading it 
 + Need subheadings (should be able to go back to things easily)
 + Need more annotations
-+ Determine where pander can make output more clean.
 + Discuss exclusion of data not used in this analysis ("freeze" the data)
 
 # Leah: READ ME
@@ -80,10 +79,6 @@ The libraries used in this case study will be:
 
 + `cowplot`, for extending ggplot functionality
 
-+ `pander`, for printing formatted R output
-
-
-
 # What is the data? 
 
 The analysis uses data from two sources:
@@ -113,7 +108,6 @@ library(cowplot)
 library(ggplot2)
 library(MASS)
 library(tidyverse)
-library(pander)
 ```
 
 ## Arrest data
@@ -949,7 +943,7 @@ Let's explore the data!
 
 Let's see if any related historical events coincided with changes in arrests.
 
-Our data is currently grouped by date in `%m/%d/%y` format. Given the number of arrests in our dataset, it's likely that these arrests cover most if not all days in between 2014 and 2018. For visualization purposes, this may offer too high of a resolution to see any patterns that may exist. 
+Our data is currently grouped by date in `%Y/%m/%d` format. Given the number of arrests in our dataset, it's likely that these arrests cover most if not all days in between 2014 and 2018. For visualization purposes, this may offer too high of a resolution to see any patterns that may exist. 
 
 **Visit this [stackoverflow](https://stackoverflow.com/questions/18091721/align-geom-text-to-a-geom-vline-in-ggplot2) document to learn how to implement this more elegantly**
 
@@ -1065,18 +1059,6 @@ AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
   summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
   unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
   mutate(prop=n/sum(n)) %>%
-ggplot(aes(x=Gender_,y=prop,fill=Gender_)) +
-  xlab("Gender") +
-  ylab("Inverse Proportion") +
-  geom_bar(stat="identity",width = 0.5) +
-  theme(axis.text.x.bottom = element_blank(),
-        axis.ticks.x.bottom = element_blank()) + 
-  ggtitle(label = "Proportion of Population by Subpopulation", subtitle = "By Gender")
-
-AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
-  summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
-  unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
-  mutate(prop=n/sum(n)) %>%
 ggplot(aes(x=Race_,y=prop,fill=Race_)) +
   xlab("Race") +
   ylab("Inverse Proportion") +
@@ -1084,6 +1066,18 @@ ggplot(aes(x=Race_,y=prop,fill=Race_)) +
   theme(axis.text.x.bottom = element_blank(),
         axis.ticks.x.bottom = element_blank()) + 
   ggtitle(label = "Proportion of Population by Subpopulation", subtitle = "By Race")
+
+AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
+  summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
+  unite(Race_Gender_AgeGroup, c("Race","Gender","AgeGroup"), sep = "/") %>%
+  mutate(prop=n/sum(n)) %>%
+ggplot(aes(x=Gender_,y=prop,fill=Gender_)) +
+  xlab("Gender") +
+  ylab("Inverse Proportion") +
+  geom_bar(stat="identity",width = 0.5) +
+  theme(axis.text.x.bottom = element_blank(),
+        axis.ticks.x.bottom = element_blank()) + 
+  ggtitle(label = "Proportion of Population by Subpopulation", subtitle = "By Gender")
 
 AnalysisDF %>% group_by_at(vars(Race, Gender, AgeGroup)) %>%
   summarise(n=sum(Arrests)) %>% mutate(Race_=Race,Gender_=Gender,AgeGroup_=AgeGroup) %>%
@@ -1130,7 +1124,7 @@ ggplot(aes(x=AgeGroup_,y=prop,fill=AgeGroup_)) +
   ggtitle("Proportion of Population by Subpopulation")
 ```
 
-To finish exploring the relationship between explanatory variables and our outcome, we'll examine arrest counts and rates by weekday.
+To finish exploring the relationship between explanatory variables and our outcome, we'll examine arrest counts and rates by weekday. **Michael**: add something here. 
 
 ```{r}
 AnalysisDF %>%
@@ -1151,9 +1145,9 @@ AnalysisDF %>%
 
 ## Identifying potential problems
 
-By looking at how rates vary over time by subpopulation, we can take advantage of observable instability that may exist in those rates to identify potential problems in our statistical analyses. 
+By looking at how rates vary over time by subpopulation we can take advantage of observable instability that may exist in those rates to identify potential problems in our statistical analyses. 
 
-We need to examine noise and recognize any potential signals in our rates. The presence of noise is indicative of random error, which should be expected in the presence of many observations. Lack of noise is indicative of little random error or few observations. Signals should be examined when possible, as they may indicate either the presence of an unaccounted for covariate or be spurious if the numerator in our rates (arrests) is small in comparison to the denominator (population size).  
+We need to examine noise and recognize any potential signals in our rates. The presence of noise is indicative of random error, which should be expected in the presence of many observations. Lack of noise is indicative of little random error or few observations. Signals should be examined when possible as they may indicate either the presence of an unaccounted for covariate or be spurious if the numerator in our rates (arrests) is small in comparison to the denominator (population size).  
 
 ```{r}
 AnalysisDF %>%
@@ -1172,7 +1166,7 @@ We subset the data to ensure our examination is limited to young white females a
 
 In the plot created, a rate ratio close to one indicates that the rate does not change much with a one unit increase in the numerator. As the rate ratio departs from one, a one unit change in the numerator has a larger effect on the change in rate.
 
-Our plot shows that the three signals we identified have low rate ratios, meaning the signals are likely spurious. This may be an issue later in our analysis. Had the rate ratios of these signals been comparable to other points, our model would need an additional covariate that explains the variation observed. 
+Our plot shows that the three signals we identified have low rate ratios meaning the signals are likely spurious. This may be an issue later in our analysis. Had the rate ratios of these signals been comparable to other points our model would need an additional covariate that explains the variation observed. 
 
 ```{r}
 SignalDF <- AnalysisDF %>% filter(Year==2015|Year==2016|Year==2017,Gender=="Female",Race=="White",AgeGroup=="20to24") %>% group_by(ArrestMonth,Race,Gender,AgeGroup) %>% mutate(r=Arrests/Population) %>% filter(r>=5e-04) %>% pull(Arrests)
@@ -1276,7 +1270,7 @@ ggplot(data = QQdf, aes(x=Observed, y=NB)) +
   ggtitle("Negative Binomial : Observed QQ Plot")
 ```
 
-**Michael** Need to add a small paragraph here summarizing what we accomplished in this section. 
+Now that we have explored the relationship between our outcome variable and some of our covariates of interest and developed a rough understanding for the temporal trends—as well as some areas of concern in our data—we can move on to the next step. 
 
 # Data analysis 
 
@@ -1295,7 +1289,9 @@ AnalysisDF$CD_lin_spline[AnalysisDF$CD_lin_spline<0] <- 0
 
 How does our temporal data look like? 
 
-Our temporal data is currently a date class, meaning R will recognize it as numeric. This will pose problems, as our model will resultantly try to fit a linear model and thus not account for trends within a certain time unit but attempt to explain an average change per time unit. In order to account for trends, we must create indicator variables for our temporal data. 
+**Michael:Leah**: How true is this? Is there a better way to explain this?
+
+Our temporal data is currently a `date` class, meaning R will recognize it as numeric. This will pose problems, as our model will resultantly try to fit a linear model and thus not account for trends within a certain time unit but attempt to explain an average change per time unit. In order to account for trends, we must create indicator variables for our temporal data. 
 
 `lubridate` has excellent functions for this. A good rule of thumb for properly creating indicator variables from date classes is that the output of a function that extracts values from date classes has to be ready for interpretable categorization with `as.factor`. In other words, the unique values produced during extraction should correspond to the intended categories. 
 
@@ -1315,11 +1311,15 @@ AnalysisDF$ArrestSeason_IV <- as.factor(AnalysisDF$ArrestSeason_IV)
 AnalysisDF$ArrestSeason_IV <- factor(AnalysisDF$ArrestSeason_IV, levels = c("March", "June", "September","December"), labels = c("Spring","Summer","Fall","Winter"))
 ```
 
+**Michael**: Insert a sentence here to transition to the next step and explain what you are doing below. 
+
 ```{r}
 colnames(AnalysisDF)
 ```
 
 ## Initial models
+
+**Michael**: Describe the process of model production and AIC calculation. 
 
 ```{r}
 MODELA1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
@@ -1798,64 +1798,9 @@ We can use `summary()` to obtain model coefficients and corresponding measures o
 summary(MODELG2)
 ```
 
-Because of the complexity of our model, a lot of output is produced. However, the output is a bit messy. 
-
-Let's use `pander()` from the `pander` package to neatly organize our output.
-
-**Michael:Leah**: This output produces errors. I could not figure out why. 
-
-```{r}
-pander(summary(MODELG2))
-```
-
 # Summary of results
 
-**Michael**: Code below (and object names) should be cleaned up to be more readable and relevant to its goals. 
-
-## Predicting change 
-
-```{r}
-
-x1 = 1:5000
-x2 = rep(1,5000)
-x3 = 1:5000
-
-y = exp(MODELG2$coefficients["CD_lin_spline"] * x1 +
-          MODELG2$coefficients["RaceWhite"] * x2 +
-                MODELG2$coefficients["RaceWhite:CD_lin_spline"] * x3)
-
-white_df <- cbind(y, x1, x2, x3)
-
-x2 = rep(0,5000)
-x3 = rep(0,5000)
-
-y = exp(MODELG2$coefficients["CD_lin_spline"] * x1 +
-          MODELG2$coefficients["RaceWhite"] * x2 +
-                MODELG2$coefficients["RaceWhite:CD_lin_spline"] * x3)
-
-black_df <- cbind(y, x1, x2, x3)
-
-model_df <- rbind(white_df, black_df)
-
-model_df <- as.data.frame(model_df)
-
-model_df$x2 <- as.factor(model_df$x2)
-
-model_df$Race <- factor(model_df$x2, levels = c(0,1), labels = c("Black", "White"))
-
-ggplot(model_df, aes(x=x1,y=y, color=Race))+
-  geom_line() +
-  xlab("Number of days since consent decree approval") +
-  ylab("IRR") +
-  ggtitle("Predicted IRR of Arrests", subtitle = "Reference group: black on day of consent decree approval") +
-  theme_minimal()
-
-3700/365
-```
-
 ## Interpretation of analysis output
-
-Other variables aside, the consent decree will close the disparities in arrest rates in approximately 10 years. 
 
 **Michael**: This summary needs to be eabout two paragraphs long. The first should provide numerical results. A sentence or two should discuss the "Final Plot". THe second paragraph should make known limitations of our analysis. 
 
@@ -1866,6 +1811,69 @@ The IRR of being White `r exp(MODELG2$coefficients["RaceWhite"])`as compared to 
 The IRR of the consent decree after one year among the White population `r exp(MODELG2$coefficients["RaceWhite:CD_lin_spline"]*365)`as compared to the Black population.
 
 **Michael**: be clear about the data we have and the fact that we are assuming similar pace 
+
+**Michael**: Code below (and object names) should be cleaned up to be more readable and relevant to its goals. 
+
+## Predicting change 
+
+```{r}
+x_CD_lin_spline = 1:5000
+x_RaceWhite = rep(1,5000)
+x_interaction = 1:5000
+
+beta_CD_lin_spline <- MODELG2$coefficients["CD_lin_spline"]
+beta_RaceWhite <- MODELG2$coefficients["RaceWhite"]
+beta_interaction <- MODELG2$coefficients["RaceWhite:CD_lin_spline"]
+
+y = exp(beta_CD_lin_spline * x_CD_lin_spline +
+          beta_RaceWhite * x_RaceWhite +
+          beta_interaction * x_interaction)
+
+white_df <- cbind(y, x_CD_lin_spline, x_RaceWhite, x_interaction)
+```
+
+```{r}
+x_CD_lin_spline = 1:5000
+x_RaceWhite = rep(0,5000)
+x_interaction = rep(0,5000)
+
+beta_CD_lin_spline <- MODELG2$coefficients["CD_lin_spline"]
+beta_RaceWhite <- MODELG2$coefficients["RaceWhite"]
+beta_interaction <- MODELG2$coefficients["RaceWhite:CD_lin_spline"]
+
+y = exp(beta_CD_lin_spline * x_CD_lin_spline +
+          beta_RaceWhite * x_RaceWhite +
+          beta_interaction * x_interaction)
+
+black_df <- cbind(y, x_CD_lin_spline, x_RaceWhite, x_interaction)
+```
+
+```{r}
+model_df <- rbind(white_df, black_df)
+
+class(model_df)
+
+model_df <- as.data.frame(model_df)
+
+class(model_df$x_RaceWhite)
+
+model_df$x_RaceWhite <- as.factor(model_df$x_RaceWhite)
+
+model_df$Race <- factor(model_df$x_RaceWhite, levels = c(0,1), labels = c("Black", "White"))
+
+model_df$Days <- model_df$x_CD_lin_spline
+
+ggplot(model_df, aes(x=Days,y=y, color=Race))+
+  geom_line() +
+  xlab("Number of days since consent decree approval") +
+  ylab("IRR") +
+  ggtitle("Predicted IRR of Arrests", subtitle = "Reference group: black on day of consent decree approval") +
+  theme_minimal()
+
+3700/365
+```
+
+Other variables aside, the consent decree will close the disparities in arrest rates in approximately 10 years. 
 
 ## Limitations
 
