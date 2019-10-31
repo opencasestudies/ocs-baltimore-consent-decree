@@ -33,8 +33,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Search "Michael:Leah" to find comments I have left for you
 
-# Margaret: READ ME
-
 # Motivation 
 
 ## Background
@@ -1257,8 +1255,6 @@ Now that we have explored the relationship between our outcome variable and some
 
 # Data analysis 
 
-**Michael**: Use gridExtra to reduce the length of output in Markdown. This can be done by placing multiple plots on a single plot. 
-
 Although we now have a dataframe with arrest and population data, we can't proceed with our analysis. Our regression analysis will require the right covariates in the right format. We'll need to create a linear spline to compare the effect of the consent decree after its approval and ensure that we have covariates that can explain different facets of temporality in our data. 
 
 What covariates do we currently have? 
@@ -1268,6 +1264,8 @@ colnames(AnalysisDF)
 ```
 
 Let's create the linear spline for the approval of the consent decree.
+
+**Michael:Leah** Does the code below for the linear spline term make sense? Do we want the day of the approval to be coded as 0?
 
 ```{r}
 AnalysisDF$CD_lin_spline <- (AnalysisDF$ArrestDate - ymd("2017-04-07"))
@@ -1359,12 +1357,12 @@ MODELE1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + 
 
 AIC_E <- AIC(MODELE1)
 
-AIC_D - AIC_E
+AIC_C - AIC_E
 ```
 
 It appears that our month indicator variable explains within year variation moreso than our quarter indicator variable.
 
-We will create one last model that will determine whether there is an interaction between our consent decree and race indicator variables.
+We'll add a covariate to this last model, Model E, that will determine whether an interaction term for our consent decree and race indicator variables creates a more appropriate model. It appears that the inclusion of this interaction term is warranted. 
 
 ```{r}
 MODELF1 <- glm(Arrests ~ Gender + AgeGroup + ArrestDay + ArrestWeekday + ArrestMonth_IV + Race * CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
@@ -1379,12 +1377,12 @@ Let us review the AIC values for our models. We'll create a table with the `kabl
 We would like the table we produce to be readily interpretable. That is, like all other visualization we create, we want it to be interpretable with little to no supplemental information. For the following table, we want to be able to easily identify the model with the lowest AIC value for future reference. 
 
 ```{r}
-model_names <- c("A",
-                 "B",
-                 "C",
-                 "D",
-                 "E",
-                 "F1")
+model_names <- c(MODELA1$formula,
+                 MODELB1$formula,
+                 MODELC1$formula,
+                 MODELD1$formula,
+                 MODELE1$formula,
+                 MODELF1$formula)
 
 model_AICs <- c(AIC_A,
                 AIC_B,
@@ -1404,18 +1402,13 @@ sapply(model_AICs_table, class)
 model_AICs_table$AIC <- as.numeric(as.character(model_AICs_table$AIC))
 ```
 
-Now that we've created several models, we can compare their appropriateness with by comparing their Akaike's Information Criterion (AIC) values.
-
-We can use `kable()` from the `kableExtra` package to build a more useful table. The table we create indicates that Model F1 is the most appropriate of the 6 models we examined. 
-
-**Michael**: Improve this table by writing out model formulas.
-**Michael**: Consider adding a number of terms column
+We can use `kable()` from the `kableExtra` package to build a more useful table. The table we create highlights the model with the lowest AIC. This makes it easier to identify the best model and its formula as we review our work. 
 
 ```{r}
-kable(model_AICs_table, align = "c") %>%
+kable(model_AICs_table, align = "r") %>%
   kable_styling(bootstrap_options = c("bordered","condensed"), full_width = F) %>%
   row_spec(which(model_AICs_table$AIC==min(model_AICs_table$AIC)), bold = T, color = "white", background = "black") %>%
-  add_header_above(c("Models A-F"=length(colnames(model_AICs_table))))
+  add_header_above(c("AIC Values of Models A-F"=length(colnames(model_AICs_table))))
 ```
 
 ## Model scrutiny
@@ -1526,20 +1519,20 @@ We can create another plot that focuses on areas of the above graph with the maj
 ```{r}
 MODELF2_fit_plot_zoomed <- ggplot(actual_fitted, aes(x = Expected, y = Observed, color=Line)) +
   geom_smooth(size=2) + 
-  xlim(0, 15) + 
-  ylim(0, 15) +
+  xlim(0, 12.5) + 
+  ylim(0, 12.5) +
   ggtitle(label = "Fit, Model F2 (Zoomed-in)") +
   theme_minimal()
 
 top_density_1_zoomed <- axis_canvas(MODELF2_fit_plot_zoomed, axis = "x", coord_flip = TRUE) +
   geom_boxplot(data=actual_fitted, aes(y=Expected), outlier.size = 0.5, outlier.shape = 19) +
-  ylim(0, 15) + 
+  ylim(0, 12.5) + 
   coord_flip() + 
   theme_void()
 
 right_density_1_zoomed <- axis_canvas(MODELF2_fit_plot_zoomed, axis = "y",coord_flip = FALSE) + 
   geom_boxplot(data=actual_fitted, aes(y=Observed,fill=Line), outlier.size = 0.5, outlier.shape = 19) +
-  ylim(0, 15) + 
+  ylim(0, 12.5) + 
   theme_void()
 
 final_model_fit_1_zoomed <- insert_xaxis_grob(MODELF2_fit_plot_zoomed, top_density_1_zoomed, position = "top")
@@ -1549,13 +1542,13 @@ final_model_fit_1_zoomed <- insert_yaxis_grob(final_model_fit_1_zoomed, right_de
 ggdraw(final_model_fit_1_zoomed)
 ```
 
-### Influential points
+### Influential Observations
 
-It appears that a few outlier points may be very influential to our model. The third quartile of expected arrests is predicted explained well by the model. Fitted values outside of this range are either underestimates or overestimates. 
+It appears that a few outlier observations may be very influential to our model. The third quartile of expected arrests is predicted explained well by the model. Fitted values outside of this range are either underestimates or overestimates. 
 
-Let's evaluate the Cook's distance value of points to determine whether this is of systematic or spurious origin. 
+Any influential points warrant further investigation. 
 
-We create a dataframe with an identification number for each point and each point's corresponding Cook's distance value. This is appended to our original dataframe.
+We will create a dataframe with an identification number for each obvservation and each observations's corresponding Cook's distance value. This is appended to our original dataframe.
  
 ```{r}
 cooks_MODELF2 <- as.data.frame(cooks.distance(MODELF2))
@@ -1570,27 +1563,38 @@ AnalysisDF$Row <-as.numeric(as.character(rownames(AnalysisDF)))
 AnalysisDF <- AnalysisDF %>% left_join(MODELF2_cooks)
 ```
 
-Now that we've updated our dataframe to include the Cook's distance value of each observation, we can determine whether our influential observations are systematic and which factors explain systematic influence over our model. 
+Now that we've updated our dataframe to include the Cook's distance value of each observation, we can determine how many influential observations we have in our dataframe. Again, because we defined what influential means we have to be careful about any conclusions we draw from these observations. 
+
+After defining our influential points, we create a factor class column.
 
 ```{r}
+mean_log_Cooks <- mean(log(AnalysisDF$Cooks))
+sd_log_Cooks <- sd(log(AnalysisDF$Cooks))
+
 AnalysisDF <- AnalysisDF %>%
   ungroup() %>%
-  mutate(diff_Cooks=abs(log(Cooks)-mean(log(Cooks))),
-         threshold=sd(log(Cooks))*3,
+  mutate(diff_Cooks=abs(log(Cooks)-mean_log_Cooks),
+         threshold=sd_log_Cooks*3,
          Type=as.factor(ifelse(diff_Cooks>threshold,
-                     "Influential Observation",
-                     "Regular Observation")))
+                     "Influential",
+                     "Regular")))
+```
+
+We can then determine the proportion of the observations that our influential points.
+
+```{r}
 summary(AnalysisDF$Type)
+
 as.numeric(summary(AnalysisDF$Type)[1])/as.numeric(summary(AnalysisDF$Type)[2])
 ```
 
-Influential points, per our definition, form about `r round((as.numeric(summary(AnalysisDF$Type)[1])/as.numeric(summary(AnalysisDF$Type)[2]))*100,2)`% of our observations. 
+Influential Observations, per our definition, form about `r round((as.numeric(summary(AnalysisDF$Type)[1])/as.numeric(summary(AnalysisDF$Type)[2]))*100,2)`% of our observations. 
 
 Creating an independent plot of Cook's distance values for each variable of interest can create a lot of output and may be very difficult for interpretation later. Although we can return to using the `cowplot` package to create a plot of plots, we'll use `gridExtra` instead. The package we use in this case is purely a matter of personal preference. This situation is pretty common when using R. In fact, many packages can produce similar, if not identical, output.
 
 In this case, we are choosing to use `gridExtra` over `cowplot` simply as a matter of personal preference. Were our goal to produce the boxplots above, we would use `cowplot`. This is because `cowplot` has functions such as `insert_*axis_grob` which allow multiple plots to use the same axes as the main plot. These functions aren't necessary for plots that can stand alone. Because we are creating a plot of plots that can stand alone, a goal that both the `gridExtra` and `cowplot` packages can satisfy, our package choice is mostly irrelevant.
  
-Let's compare influential points to non-influential points.
+Let's compare influential observations to non-influential observations.
 
 ```{r}
 A <- AnalysisDF %>%
@@ -1629,16 +1633,23 @@ D <- AnalysisDF %>%
   facet_grid(Type~.)
 ```
 
-**Michael**: This might need a better title.
+It appears that our influential observations are more White and female than our regular observations. 
 
 ```{r}
-grid.arrange(A,B, ncol=2,top="Influential Points")
-grid.arrange(C,D, ncol=2, top="Influential Points (Continued)")
+grid.arrange(A,B, ncol=2,top="Influential Observations")
+```
+
+These observations also tend to older and cluster around 2017 and 2018, the year the consent decree was approved and the following year. 
+
+```{r}
+grid.arrange(C,D, ncol=2, top="Influential Observations (Continued)")
 ```
 
 ## Residual diagnostics
 
-**Michael**: explain what you are doing here 
+We need to examine our residuals and how they relate to the indentified influential points. 
+
+Let's begin by plotting our fitted values against our residuals. We'll need to create a dataframe with the values of both to do this. Appending our analysis dataframe with this newly created dataframe will allow us to compare the residuals of influential and regular observations. 
 
 ```{r}
 resid_check <- as.data.frame(cbind(MODELF2$fitted.values, MODELF2$y - MODELF2$fitted.values))
@@ -1653,7 +1664,11 @@ resid_check %>%
   ylab("Residual") + 
   ggtitle("Fitted Values and Corresponding Residuals") + 
   theme_minimal()
+```
 
+We then separate the above plot by influential and regular observations. It appears that our influential observations are well explained by the model. Conversely, regular (non-influential) observations appear to emulate the underestimation and overestimation in the plot of all our observations.
+
+```{r}
 resid_check %>%
   ggplot(aes(x=fitted.value, y=residual)) +
   geom_point(alpha=1/10,size=2,color="gray")+
@@ -1663,7 +1678,13 @@ resid_check %>%
   ggtitle("Fitted Values and Corresponding Residuals") + 
   theme_minimal() +
   facet_wrap(Type~.)
+```
 
+### Fitted values and Cook's distance
+
+Our Cook's distance values appear to be slightly associated with the fitted values.
+
+```{r}
 resid_check %>%
   ggplot(aes(x=fitted.value, y=Cooks)) +
   geom_point(size=2,color="gray")+
@@ -1672,7 +1693,11 @@ resid_check %>%
   ylab("Cooks") + 
   ggtitle("Fitted Values and Cooks Distances") + 
   theme_minimal()
+```
 
+Separating the above plot by type of observation, we find that the association we found in the above plot is restricted to regular (non-influential) observations.
+
+```{r}
 resid_check %>%
   ggplot(aes(x=fitted.value, y=Cooks)) +
   geom_point(size=2,color="gray")+
@@ -1683,6 +1708,8 @@ resid_check %>%
   theme_minimal() +
   facet_wrap(Type~.)
 ```
+
+### Comparing rates
 
 ```{r}
 resid_check %>%
@@ -1796,21 +1823,17 @@ summary(MODELG2)
 
 ## Interpretation of analysis output
 
-**Michael**: This summary needs to be about two paragraphs long. The first should provide numerical results. A sentence or two should discuss the "Final Plot". THe second paragraph should make known limitations of our analysis. 
+The incidence rate of arrests after the approval of the consent decree is (fix for below) after one year is `r exp(MODELG2$coefficients["CD_lin_spline"]*365)` times the incidence rate of arrests prior to the approval of the consent decree.
 
-The IRR of ARRESTS (fix for below) after one year `r exp(MODELG2$coefficients["CD_lin_spline"]*365)` as compared to prior to the approval of the consent decree.
+The incidence rate of arrests for people who are White is `r exp(MODELG2$coefficients["RaceWhite"])` times the incidence rate of arrests for people who are Black. 
 
-The IRR of being White `r exp(MODELG2$coefficients["RaceWhite"])`as compared to being Black. 
-
-The IRR of the consent decree after one year among the White population `r exp(MODELG2$coefficients["RaceWhite:CD_lin_spline"]*365)`as compared to the Black population.
-
-**Michael**: be clear about the data we have and the fact that we are assuming similar pace 
-
-**Michael**: Code below (and object names) should be cleaned up to be more readable and relevant to its goals. 
-
-**Michael**: Sensitivity analysis without influential points 
+The incidence rate of arrests after the approval of the consent decree for people who are White is `r exp(MODELG2$coefficients["RaceWhite:CD_lin_spline"]*365)` times the incidence rate after the approval of the consent decree for people who are Black.
 
 ## Predicting change 
+
+Now that we have our model coefficients, we can estimate when arrest rates will be similar for White and Black Baltimoreans. This requires a major assumtion: that the current effect observed remains constant over time. While this assumption is very unlikely to hold true, it's interesting to examine the potential of the intervention of interest.
+
+We create a dataframe for each race and—with the model coefficients for the effects of the consent decree, race, and the interaction between the two—calculate the incidence rate ratios of arrest by race over time. 
 
 ```{r}
 x_CD_lin_spline = 1:5000
@@ -1826,9 +1849,7 @@ y = exp(beta_CD_lin_spline * x_CD_lin_spline +
           beta_interaction * x_interaction)
 
 white_df <- cbind(y, x_CD_lin_spline, x_RaceWhite, x_interaction)
-```
 
-```{r}
 x_CD_lin_spline = 1:5000
 x_RaceWhite = rep(0,5000)
 x_interaction = rep(0,5000)
@@ -1842,9 +1863,7 @@ y = exp(beta_CD_lin_spline * x_CD_lin_spline +
           beta_interaction * x_interaction)
 
 black_df <- cbind(y, x_CD_lin_spline, x_RaceWhite, x_interaction)
-```
 
-```{r}
 model_df <- rbind(white_df, black_df)
 
 class(model_df)
@@ -1863,13 +1882,21 @@ ggplot(model_df, aes(x=Days,y=y, color=Race))+
   geom_line() +
   xlab("Number of days since consent decree approval") +
   ylab("IRR") +
-  ggtitle("Predicted IRR of Arrests", subtitle = "Reference group: black on day of consent decree approval") +
+  ggtitle("Predicted IRR of Arrests", subtitle = "Reference group: black on day before consent decree approval") +
   theme_minimal()
 
 3700/365
 ```
 
-Other variables aside, the consent decree will close the disparities in arrest rates in approximately 10 years. 
+Other variables aside, the consent decree will close the disparities in arrest rates approximately 10 years after its approval. 
 
 ## Limitations
+
+Our analysis has several limitations. A majority of our covariates were indicators variables that could have been treated numerically in a more complex longitudinal analysis. This would have accounted for temporal autocorrelation, the presence of similar observations at similar time points, a phenomona we observed but did not account for rigourously in our analysis.
+
+We relied on population estimates for a majority of the observations occuring after the approval of the consent decree, meaning that our offset accounting for different population sizes could have created a bias in our results and by extension our interpretation of our results.
+
+## Future considerations
+
+We did not use the spatial data available in our dataset. With additional spatial data publically available by the US Census Bureau, an exploration of the spatial disparities in arrests could have been possible (click [here](https://catalog.data.gov/dataset/tiger-line-shapefile-2017-nation-u-s-current-state-and-equivalent-national) for an example of spatial data that could have been used to explore this questino in R). Given that the population distribution of Baltimore varies by region and the likelihood that the consent decree led to differing levels of change in arrests by police districts as a result of that population distribution, the application of geostatistics in our analysis could have elucidated patterns that would not be possible in a standard regression analysis. A spatial-temporal analysis could yield more valid, nuanced conclusions. 
 
