@@ -318,8 +318,6 @@ Let us create a quick workflow.
 
 ## Workflow 
 
-**Michael**: Update the workflow below
-
 -----
 
 We'll begin by making each of the three dataframes more practical to use. Then we'll combine the population datasets to make a population dataframe. Lastly, we'll create a final dataframe by grouping the arrest and population dataframes similarly and then combine the two.
@@ -331,13 +329,6 @@ We'll begin by making each of the three dataframes more practical to use. Then w
 **Making the arrest data more practical**
 
 We'll begin with the arrest data.
-
-**Michael**: **Consider removing this.**
-
-We can get rid of the spatial data.
-
-We need to be careful when doing this, however. We have the `MASS` and `tidyverse` package loaded. `dplyr`, a package within the `tidyverse`, has a function that we can use called `select()`. `MASS` also has a `select()` function. These functions, `dplyr::select()` and `MASS::select()`, although identically named, are different, meaning whichever package we load second will mask the identically named function of the package loaded first. Since we loaded `dplyr` second (by loading `tidyverse`), our `select()` function is that from `dplyr`. A sure way to use the specific function you intend to use is by specifying the package with a prefix of the form `package::function()`. We do this below, although it isn't necessary since `dplyr`(again, from `tidyverse`) was loaded second.
-**Michael**: **Consider removing this.^**
 
 We need to know what type of data we are working with to appropriately work with out data.
 
@@ -968,13 +959,12 @@ The death of Michael Brown (August of 2014) appears to immediately precede sharp
 
 `geom_smooth` can often oversmooth our data, reducing its variance, meaning we may not be able to see any small scale variation that could be relevant for our analysis.
 
-We can use `gridExtra` to place all these plots in a single plot. This makes comparisons a bit easier. 
+We can create several plots to visualize the trend from the plot above at varying resolutions. This could help us identify additional trends in our data. 
 
-2019 has incomplete data, let's exclude it for now. **Michael**: Fix the code below so that 2019 is included. 
+We can use `gridExtra` to place all these plots in a single plot. This saves us output and makes the process of comparing and contrasting the plots easier. 
 
 ```{r}
 day <- AnalysisDF %>%
-  filter(!(Year %in% 2019)) %>%
   group_by(day=ArrestDay) %>% mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=day, y=n))+
   geom_line(color="red")
@@ -982,7 +972,6 @@ day <- AnalysisDF %>%
 
 ```{r}
 week <- AnalysisDF %>%
-  filter(!(Year %in% 2019)) %>%
   group_by(week=ArrestWeek) %>%
   mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=week, y=n))+
@@ -991,7 +980,6 @@ week <- AnalysisDF %>%
 
 ```{r}
 month <- AnalysisDF %>%
-  filter(!(Year %in% 2019)) %>%
   group_by(month=ArrestMonth) %>%
   mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=month, y=n))+
@@ -1000,7 +988,6 @@ month <- AnalysisDF %>%
 
 ```{r}
 quarter <- AnalysisDF %>%
-  filter(!(Year %in% 2019)) %>%
   group_by(quarter=ArrestQuarter) %>%
   mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=quarter, y=n))+
@@ -1009,7 +996,6 @@ quarter <- AnalysisDF %>%
 
 ```{r}
 season <- AnalysisDF %>%
-  filter(!(Year %in% 2019)) %>%
   group_by(season=ArrestQuarter) %>%
   mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=season, y=n))+
@@ -1018,17 +1004,14 @@ season <- AnalysisDF %>%
 
 ```{r}
 year <- AnalysisDF %>%
-  filter(!(Year %in% 2019)) %>%
   group_by(year=ArrestYear) %>%
   mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=year, y=n))+
   geom_line(color="orange")
 ```
 
-**Michael**: Fix the title to the plot below.
-
 ```{r}
-grid.arrange(day,week,month,quarter,season,year,nrow=3,ncol=2,top="Plot 2")
+grid.arrange(day,week,month,quarter,season,year,nrow=3,ncol=2,top="Arrests over time by different resolutions")
 ```
 
 It looks like using month units works well for observing large and small scale variation. We will use this unit to explore the data some more temporally. Note that our decision to use this unit is strictly for vizualization purposes and does not necessarily mean that any specific pattern exists for statistical purposes. 
@@ -1124,7 +1107,7 @@ ggplot(aes(x=AgeGroup_,y=prop,fill=AgeGroup_)) +
   ggtitle("Proportion of Population by Subpopulation")
 ```
 
-To finish exploring the relationship between explanatory variables and our outcome, we'll examine arrest counts and rates by weekday. **Michael**: add something here. 
+To finish exploring the relationship between explanatory variables and our outcome, we'll examine arrest counts and rates by weekday. It appears that most arrests occur mid-week.  
 
 ```{r}
 AnalysisDF %>%
@@ -1276,6 +1259,10 @@ Now that we have explored the relationship between our outcome variable and some
 
 **Michael**: Use gridExtra to reduce the length of output in Markdown. This can be done by placing multiple plots on a single plot. 
 
+Although we now have a dataframe with arrest and population data, we can't proceed with our analysis. Our regression analysis will require the right covariates in the right format. We'll need to create a linear spline to compare the effect of the consent decree after its approval and ensure that we have covariates that can explain different facets of temporality in our data. 
+
+What covariates do we currently have? 
+
 ```{r}
 colnames(AnalysisDF)
 ```
@@ -1286,8 +1273,6 @@ Let's create the linear spline for the approval of the consent decree.
 AnalysisDF$CD_lin_spline <- (AnalysisDF$ArrestDate - ymd("2017-04-07"))
 AnalysisDF$CD_lin_spline[AnalysisDF$CD_lin_spline<0] <- 0
 ```
-
-How does our temporal data look like? 
 
 **Michael:Leah**: How true is this? Is there a better way to explain this?
 
@@ -1302,7 +1287,7 @@ AnalysisDF$ArrestQuarter_IV <- as.factor(quarter(AnalysisDF$ArrestDate))
 AnalysisDF$ArrestYear_IV <- as.factor(year(AnalysisDF$ArrestDate))
 ```
 
-Seasons also need to be generated. A good thing to know is that winter starts in December. With that information and `floor_date`, which rounds date class data down to the lowest boundary, we can assign seasons to our temporal data.
+Seasons also need to be generated. We know that winter starts in December. With that information and `floor_date`, which rounds date class data down to the lowest boundary, we can assign seasons to our temporal data.
 
 ```{r}
 AnalysisDF$ArrestSeason_IV <- floor_date(AnalysisDF$ArrestDate, "season")
@@ -1311,7 +1296,7 @@ AnalysisDF$ArrestSeason_IV <- as.factor(AnalysisDF$ArrestSeason_IV)
 AnalysisDF$ArrestSeason_IV <- factor(AnalysisDF$ArrestSeason_IV, levels = c("March", "June", "September","December"), labels = c("Spring","Summer","Fall","Winter"))
 ```
 
-**Michael**: Insert a sentence here to transition to the next step and explain what you are doing below. 
+Let's see what column names we have. 
 
 ```{r}
 colnames(AnalysisDF)
@@ -1319,38 +1304,62 @@ colnames(AnalysisDF)
 
 ## Initial models
 
-**Michael**: Describe the process of model production and AIC calculation. 
+We have the columns we need for our regression.
+
+Let's begin analyzing our data. 
+
+We'll be selecting our best model by AIC. Although some algorithms do exist to do this automatically, we're interested in having more control over which model we choose. There may be a scenario where we can only pick between one of two covariates because of how similar they are. Relying on an algorithm to conduct this process surrenders our ability to do this. This can hinder our analysis significantly if our goal is inference and not prediction. Furthermore, we can create several iterations of models manually in such a way that emulates the algorithm. We'll do this by incrementally adding covariates to our model and making conscientious decisions about what we need to adjust for.
+
+Our model needs to be parsimonious. AIC values penalize models with more covariates and favor models with better fit. 
+
+Let's begin by creating the simplest model we believe could explain the variation in our data. We'll calculate save the AIC value for the model and create a second model to compare it to.
 
 ```{r}
 MODELA1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 AIC_A <- AIC(MODELA1)
-```
 
-```{r}
 MODELB1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 AIC_B <- AIC(MODELB1)
 ```
 
+Generally speaking, the lower the AIC value of a model, the more appropriate that model is. Model B appears to be more appropriate than Model A.
+
+```{r}
+AIC_A - AIC_B
+```
+
+We repeat this process for Model C.
+
 ```{r}
 MODELC1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestQuarter_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 AIC_C <- AIC(MODELC1)
+
+AIC_B - AIC_C
 ```
+
+Our temporal indicator variables representing quarters and seasons are nearly identical. We need to decide which covariate to use to adjust for within-year trends. To do this we simply replace the indicator variable representing quarters in Model C with our indicator variable representing season and compare the AIC value of the resulting model. 
 
 ```{r}
 MODELD1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestSeason_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 AIC_D <- AIC(MODELD1)
+
+AIC_C - AIC_D
 ```
 
-It appears that our quarter indicator variable better explains within year variation than does that season indicator variable.
+It appears that our indicator variable representing quarters better explains within year variation than does our indicator variable representing seasons.
+
+We have an additional indicator variable, months, that could potentially adjust for within-year variation. After replacing the indicator variable representing quarters with an indicator variable representing months, we find that the indicator variable representing months better explains within year variation.
 
 ```{r}
 MODELE1 <- glm(Arrests ~ Gender + AgeGroup + Race + ArrestDay + CD_lin_spline + ArrestWeekday + ArrestMonth_IV, data=AnalysisDF, family=poisson, offset(log(Population)))
 
 AIC_E <- AIC(MODELE1)
+
+AIC_D - AIC_E
 ```
 
 It appears that our month indicator variable explains within year variation moreso than our quarter indicator variable.
@@ -1367,7 +1376,7 @@ AIC_F1 <- AIC(MODELF1)
 
 Let us review the AIC values for our models. We'll create a table with the `kableExtra` package. 
 
-At the moment, we are not interested in creating a publishable quality table. Still, we would like the table we produce to be readily interpretable. That is, like all other visualization we create, we want it to be interpretable with little to no supplemental information. For the following table, we want to be able to easily identify the model with the lowest AIC value for future reference. 
+We would like the table we produce to be readily interpretable. That is, like all other visualization we create, we want it to be interpretable with little to no supplemental information. For the following table, we want to be able to easily identify the model with the lowest AIC value for future reference. 
 
 ```{r}
 model_names <- c("A",
@@ -1399,12 +1408,14 @@ Now that we've created several models, we can compare their appropriateness with
 
 We can use `kable()` from the `kableExtra` package to build a more useful table. The table we create indicates that Model F1 is the most appropriate of the 6 models we examined. 
 
-```{r}
+**Michael**: Improve this table by writing out model formulas.
+**Michael**: Consider adding a number of terms column
 
-kable(model_AICs_table) %>%
+```{r}
+kable(model_AICs_table, align = "c") %>%
   kable_styling(bootstrap_options = c("bordered","condensed"), full_width = F) %>%
   row_spec(which(model_AICs_table$AIC==min(model_AICs_table$AIC)), bold = T, color = "white", background = "black") %>%
-  add_header_above(c("AIC Values, Models A-F"=length(colnames(model_AICs_table))))
+  add_header_above(c("Models A-F"=length(colnames(model_AICs_table))))
 ```
 
 ## Model scrutiny
@@ -1504,11 +1515,13 @@ final_model_fit_1 <- insert_yaxis_grob(final_model_fit_1, right_density_1, posit
 
 We then print the plot we've created with `ggdraw()` by the `cowplot` package. 
 
-The plot we've created shows that a small number of points is impacting our model.
+The plot we've created shows that a small number of points are impacting our model.
 
 ```{r}
 ggdraw(final_model_fit_1)
 ```
+
+We can create another plot that focuses on areas of the above graph with the majority of points. This will allows us to better determine whether our model is satisfactory.
 
 ```{r}
 MODELF2_fit_plot_zoomed <- ggplot(actual_fitted, aes(x = Expected, y = Observed, color=Line)) +
@@ -1538,19 +1551,11 @@ ggdraw(final_model_fit_1_zoomed)
 
 ### Influential points
 
-It appears that a few outlier points may be very influential to our model. Let's revisit some of the exploratory plots we created.
-
-```{r}
-AnalysisDF %>% group_by(AgeGroup) %>% summarise(Count=sum(Arrests)) %>%
-ggplot(aes(x=AgeGroup,y=Count,fill=AgeGroup)) + 
-  geom_bar(stat="identity") + 
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
-```
+It appears that a few outlier points may be very influential to our model. The third quartile of expected arrests is predicted explained well by the model. Fitted values outside of this range are either underestimates or overestimates. 
 
 Let's evaluate the Cook's distance value of points to determine whether this is of systematic or spurious origin. 
 
-We create a dataframe with an identification number for each point and each point's corresponding Cook'S distance value. This is appended to our original dataframe.
+We create a dataframe with an identification number for each point and each point's corresponding Cook's distance value. This is appended to our original dataframe.
  
 ```{r}
 cooks_MODELF2 <- as.data.frame(cooks.distance(MODELF2))
@@ -1567,48 +1572,28 @@ AnalysisDF <- AnalysisDF %>% left_join(MODELF2_cooks)
 
 Now that we've updated our dataframe to include the Cook's distance value of each observation, we can determine whether our influential observations are systematic and which factors explain systematic influence over our model. 
 
-Creating an independent plot of Cook's distance values for each variable of interest can create a lot of output and may be very difficult for interpretation later. Although we can return to using the `gridExtra` package to create a plot of plots, we'll use `cowplot` instead. The package we use in this case is purely a matter of personal preference. This situation is pretty common when using R. In fact, many packages can produce similar, if not identical, output.
-
-In this case, we are choosing to use `cowplot` over `gridExtra` simply as a matter of personal preference. Were our goal to produce the boxplots above, we would use `cowplot`. This is because `cowplot` has functions such as `insert_*axis_grob` which allow multiple plots to use the same axes as the main plot. These functions aren't necessary for plots that can stand alone. Because we are creating a plot of plots that can stand alone, a goal that both the `gridExtra` and `cowplot` packages can satisfy, our package choice is mostly irrelevant.
-
-**Michael**: Need to make this plot more legible. 
-
-```{r}
-AgeGroup_no_log <- ggplot(data=AnalysisDF, aes(x=AgeGroup,y=Cooks,fill=AgeGroup)) +
-  geom_boxplot() +
-  facet_grid(Gender~Race) + 
-  ggtitle(label = "Cooks Distance", subtitle = "By Age Group")+
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank())
-
-AgeGroup_log <- ggplot(data=AnalysisDF, aes(y=log(Cooks),fill=AgeGroup)) +
-  geom_boxplot() +
-  facet_grid(Gender~Race) + 
-  ggtitle(label="log(Cooks Distance)", subtitle = "By Age Group")+
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank())
-
-plot_grid(AgeGroup_no_log,AgeGroup_log, labels=c("A","B"))
-```
-
 ```{r}
 AnalysisDF <- AnalysisDF %>%
   ungroup() %>%
-  mutate(diff_Cooks=abs(Cooks-mean(Cooks)),
-         threshold=sd(Cooks)*4,
+  mutate(diff_Cooks=abs(log(Cooks)-mean(log(Cooks))),
+         threshold=sd(log(Cooks))*3,
          Type=as.factor(ifelse(diff_Cooks>threshold,
                      "Influential Observation",
                      "Regular Observation")))
 summary(AnalysisDF$Type)
 as.numeric(summary(AnalysisDF$Type)[1])/as.numeric(summary(AnalysisDF$Type)[2])
 ```
+
+Influential points, per our definition, form about `r round((as.numeric(summary(AnalysisDF$Type)[1])/as.numeric(summary(AnalysisDF$Type)[2]))*100,2)`% of our observations. 
+
+Creating an independent plot of Cook's distance values for each variable of interest can create a lot of output and may be very difficult for interpretation later. Although we can return to using the `cowplot` package to create a plot of plots, we'll use `gridExtra` instead. The package we use in this case is purely a matter of personal preference. This situation is pretty common when using R. In fact, many packages can produce similar, if not identical, output.
+
+In this case, we are choosing to use `gridExtra` over `cowplot` simply as a matter of personal preference. Were our goal to produce the boxplots above, we would use `cowplot`. This is because `cowplot` has functions such as `insert_*axis_grob` which allow multiple plots to use the same axes as the main plot. These functions aren't necessary for plots that can stand alone. Because we are creating a plot of plots that can stand alone, a goal that both the `gridExtra` and `cowplot` packages can satisfy, our package choice is mostly irrelevant.
  
 Let's compare influential points to non-influential points.
 
 ```{r}
-AnalysisDF %>%
+A <- AnalysisDF %>%
   group_by(Type,Gender) %>%
   summarise(count=n()) %>%
   mutate(prop=prop.table(count)) %>%
@@ -1617,16 +1602,7 @@ AnalysisDF %>%
 ```
 
 ```{r}
-AnalysisDF %>%
-  group_by(Type,AgeGroup) %>%
-  summarise(count=n()) %>%
-  mutate(prop=prop.table(count)) %>%
-  ggplot(aes(x=Type,y=prop,fill=AgeGroup)) +
-  geom_bar(stat="identity") 
-```
-
-```{r}
-AnalysisDF %>%
+B <- AnalysisDF %>%
   group_by(Type,Race) %>%
   summarise(count=n()) %>%
   mutate(prop=prop.table(count)) %>%
@@ -1635,16 +1611,34 @@ AnalysisDF %>%
 ```
 
 ```{r}
-AnalysisDF %>%
+C <- AnalysisDF %>%
+  group_by(Type,AgeGroup) %>%
+  summarise(count=n()) %>%
+  mutate(prop=prop.table(count)) %>%
+  ggplot(aes(x=Type,y=prop,fill=AgeGroup)) +
+  geom_bar(stat="identity") 
+```
+
+```{r}
+D <- AnalysisDF %>%
   group_by(Type,ArrestYear_IV) %>%
   summarise(count=n()) %>%
   mutate(prop=prop.table(count)) %>%
   ggplot(aes(x=ArrestYear_IV,y=prop, fill=prop)) +
   geom_bar(stat="identity") +
-  facet_grid(.~Type)
+  facet_grid(Type~.)
+```
+
+**Michael**: This might need a better title.
+
+```{r}
+grid.arrange(A,B, ncol=2,top="Influential Points")
+grid.arrange(C,D, ncol=2, top="Influential Points (Continued)")
 ```
 
 ## Residual diagnostics
+
+**Michael**: explain what you are doing here 
 
 ```{r}
 resid_check <- as.data.frame(cbind(MODELF2$fitted.values, MODELF2$y - MODELF2$fitted.values))
@@ -1802,7 +1796,7 @@ summary(MODELG2)
 
 ## Interpretation of analysis output
 
-**Michael**: This summary needs to be eabout two paragraphs long. The first should provide numerical results. A sentence or two should discuss the "Final Plot". THe second paragraph should make known limitations of our analysis. 
+**Michael**: This summary needs to be about two paragraphs long. The first should provide numerical results. A sentence or two should discuss the "Final Plot". THe second paragraph should make known limitations of our analysis. 
 
 The IRR of ARRESTS (fix for below) after one year `r exp(MODELG2$coefficients["CD_lin_spline"]*365)` as compared to prior to the approval of the consent decree.
 
@@ -1813,6 +1807,8 @@ The IRR of the consent decree after one year among the White population `r exp(M
 **Michael**: be clear about the data we have and the fact that we are assuming similar pace 
 
 **Michael**: Code below (and object names) should be cleaned up to be more readable and relevant to its goals. 
+
+**Michael**: Sensitivity analysis without influential points 
 
 ## Predicting change 
 
