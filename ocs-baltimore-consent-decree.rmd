@@ -50,11 +50,11 @@ The purpose of this consent decree was to ensure that the Baltimore Police Depar
 
 (See this arcticle by the [Baltimore Sun](https://www.baltimoresun.com/news/crime/bs-md-ci-consent-decree-explainer-20180403-story.html) for more information about Baltimore's consent decree.)
 
-## Learning objectives
+### Learning objectives
 
 In this case study, we will focus on the data science skills of data wrangling, data visualization, using regular expressions to work with text data, and modeling with Poisson regression. 
 
-## R packages
+### R packages
 
 The R packages used in this case study are listed below, along with a brief description of why we will use each each package.  Please ensure you have these packages installed before running this code.
 
@@ -98,56 +98,41 @@ library(MASS)
 library(tidyverse)
 ```
 
-## Arrest data
+Now we work on importing the data from our two sources.
 
-We'll import the arrest data first. 
+### Baltimore arrest data
 
+We can download arrest data from the Baltimore Police Department from through Open Baltimore [here](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt) by clicking on "Export" on the menu bar in the upper right and selecting "CSV".  This will downloads a comma separated values (.csv) file named `BDP_Arrests.csv`.  Our case study works with a version of this data set that was last updated on September 3, 2019.  You can find this version in the Github repository associated with this case study.  If you use a more recent version of this arrest data, your results may not match ours exactly!
 
+First we read in the data using `read_csv()` from the `readr` package:
 ```{r}
 BPD_Arrests <- read_csv("BPD_Arrests.csv")
 ```
 
-Notice the number of parsing failures. `read_csv()` predicts the class of each column when loading data. Sometimes these predictions are difficult for `read_csv` to make when the data has errors and are resultantly error-prone.
+Notice the number of parsing failures!  The `read_csv()` function predicts a data type for each column of the dataset using the first 1000 rows of the data file and then reads in the data according to these predicted types.  However, sometimes values later in the data file don't match the data type that has been predicted!
 
-Still, these predictions and errors are useful. With `read_csv()`, we can explicitly assign data classes. Having predictions beforehand allows us to identify potential data collection errors. This is particularly useful when a dataset has a very large number of observations. 
+Let's see if we can figure out where the problems are occurring! The `problems()` function allows us to retrieve information on the parsing failures we see above. We can determine which variable columns are causing problems (and how many problems there are) with the `summary()` function after some minor transformations.
 
-The `problems()` function from `read_csv` allows us to retrieve the problems identified when we first loaded our data. We can determine which columns are causing problems (and how many) with the `summary()` function, but not without some minor transformations of the data. 
-
-Let us look at some of the problems in the dataset identified by `read_csv()`. Note that problems not identified by the function may exist and require more direct methods to identify them. 
+Let us look at some of the parsing failures identified by `read_csv()`. Note that there may be other problems with the data that aren't identified as parsing failures; errors like these may require more direct methods to identify them. 
 
 ```{r}
 problems(BPD_Arrests)
 ```
 
-By converting the `tibble` created by `read_csv()` into a dataframe using `as.data.frame`, we can then use the `as. factor()`. This changes the `col` column into a format `as.factor()` can comprehend. After this change has been made, the `summary()` function  can then create a count of parsing problems caused by each column in our original dataframe. 
+We see that the `problems()` function returns a tibble where each row is a parsing failure.  For each parsing failure, we are given the row number where the parsing error occurred (`row`), the name of the column in the data where it occurred (`col`), and the type of value that was expected by the parser (`expected`) as well as the value that actually occurred (`actual`).  So, for example, we see that in the 10,626 row of the data file the parser expected a double in the `Post` column but instead saw the value `ETC.` which is clearly not a double! 
 
-If we don't do the above transformations, we get an error message.
-
-```{r, error = TRUE}
-summary(as.factor(problems(BPD_Arrests)[,"col"]))
-```
-
-This is because the the `problems()` function returns output with multiple classes. In some cases, having multiple classes can complicate the way in which functions are applied.
-
+Let's look at which columns in the data file seem to be causing the problems by counting the number of errors for each value of `col`:
 ```{r}
-class(problems(BPD_Arrests)[,"col"])
+problems(BPD_Arrests) %>%
+  count(col)
 ```
 
-We can get around this with the `as.data.frame()` function.  
-
+The parsing errors all occur in the `Latitude`, `Longitude`, and `Post` columns.  What other variables are in the data set?
 ```{r}
-summary(as.factor(as.data.frame(problems(BPD_Arrests))[,"col"]))
+names(BPD_Arrests)
 ```
 
-The `Latitude`, `Longitude`, and `Post` columns appear to be causing problems.
-
-Let's look the columns we will be working with.
-
-```{r}
-colnames(BPD_Arrests)
-```
-
-As you can see, we have some demographic information about the person arrested. We also have some information about the nature of the arrest. Spatial data is also available. 
+From the variable names we can see that we have some demographic information about the person arrested. We also have some information about the nature of the arrest. Spatial data is also available. 
 
 The object containing our data is currently a `tibble`. The `tibble` class is great for printing data neatly, but otherwise does not provide substantial advantages over the `dataframe` class. To get a peak at our data without any of the special formatting provided by the `tibble` class, we can use the functions `as.data.frame()` and `head()` to print all columns of data for the first several rows.  
 
@@ -156,6 +141,8 @@ head(as.data.frame(BPD_Arrests))
 ```
 
 Now that we know what data we are working with, let's specify the classes of our columns with `read_csv()`. 
+
+Still, these predictions and errors are useful. With `read_csv()`, we can explicitly assign data classes. Having predictions beforehand allows us to identify potential data collection errors. This is particularly useful when a dataset has a very large number of observations. 
 
 We have the option to not read in some of the data while we are specifying the classes with `read_csv()`. This can be done with the `cols_only()` function, which specifies which columns to read in. 
 
