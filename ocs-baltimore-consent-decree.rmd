@@ -15,10 +15,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ![](BaltimoreConsentDecree.jpg)
 
-# Details
-
-+ Dataset last updated September 3rd, 2019
-
 # Must Do
 
 + Explain apply functions earlier so that functions can be applied across datasets easily and efficiently. 
@@ -35,63 +31,57 @@ Search "Michael:Leah" to find comments I have left for you
 
 # Motivation 
 
-## Background
+In this case study, we will examine whether the consent decree between the Baltimore Police Department and the Department of Justice had an impact on arrest patterns in Baltimore City.
 
-On April 12th, Freddie Gray was arrested in West Baltimore for carrying a knife forbidden by law. A week after his arrest, Freddie Gray died. HIs death was attributed to injuries to the spinal cord. Six police officers present at the arrest were then suspended with pay and later had criminal charges filed against them. The Office of the Chief Medical Examiner determined that Freddie Gray's death was a result of a "high-energy injury" and that the death was a homicide by omission of care. As details of Freddie Gray's death became more publically known, protests ensued.
+### Background
 
-Shortly after, Mayor Stephanie Rawlings-Blake formally requested that the Department of Justice (DoJ) conduct an investigation of Baltimore's policing practices. The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) had engaged in multiple unconstitutional policing practices. A consent decree between BPD and the DoJ, which mandates a series of restrictions on officers, amongst other things, was approved by a judge on April 7^th^, 2017. (see this arcticle by the [Baltimore Sun](https://www.baltimoresun.com/news/crime/bs-md-ci-consent-decree-explainer-20180403-story.html)). By then, all officers involved in the arrest had either been acquitted or had charges against them dropped. 
+On April 12, 2015, Freddie Gray was arrested in West Baltimore for carrying a knife. A week after his arrest, Freddie Gray died. His death was attributed to injuries to the spinal cord. Six police officers present at his arrest were then suspended with pay and later had criminal charges filed against them. The Office of the Chief Medical Examiner determined that Freddie Gray's death was a result of a "high-energy injury" and that the death was a homicide by omission of care. As details of Freddie Gray's death became more publically known, protests ensued.
 
-The goal of the consent decree is to ensure that the Baltimore Police Department resolves the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, its practical impact is still unknown largely because the broad scope of its various components and the underlying complexity of each of those components. An excerpt from page 48 of [the DoJ's report](https://www.justice.gov/crt/file/883296/download) highlights the multiple infractions suspected of the Baltimore Police Department: 
+**Leah:Michael** Can we find a link to some reputable news sources that summarize this case and resulting protests? 
+
+Shortly after, Mayor Stephanie Rawlings-Blake formally requested that the Department of Justice (DoJ) conduct an investigation of Baltimore's policing practices. The DoJ, after a yearlong investigation, found that the Baltimore Police Department (BPD) had engaged in multiple unconstitutional policing practices. On April 7, 2017, a judge approved a consent decree between BPD and the DoJ, which mandated, among other things, a series of restrictions on officers. 
+
+The purpose of this consent decree was to ensure that the Baltimore Police Department resolves the unconstitutional policing practices identified by the DoJ investigation. Although court enforceable, its practical impact is still unknown largely because of the broad scope of its various components and the underlying complexity of each of those components. An excerpt from page 48 of [the DoJ's report](https://www.justice.gov/crt/file/883296/download) highlights the multiple infractions suspected of the Baltimore Police Department: 
 
 ---
 
 ![](DoJ_Excerpt.png)
-
 ---
 
-## Analysis goal
-
-In this case study, we will examined whether the consent decree had an impact on arrest patterns. 
+(See this arcticle by the [Baltimore Sun](https://www.baltimoresun.com/news/crime/bs-md-ci-consent-decree-explainer-20180403-story.html) for more information about Baltimore's consent decree.)
 
 ## Learning objectives
 
-The learning objectives include data wrangling, data visualization, regular expressions, and Poisson regression. 
+In this case study, we will focus on the data science skills of data wrangling, data visualization, using regular expressions to work with text data, and modeling with Poisson regression. 
 
-## Libraries
+## R packages
 
-The libraries used in this case study will be:
+The R packages used in this case study are listed below, along with a brief description of why we will use each each package.  Please ensure you have these packages installed before running this code.
 
 + `tidyverse`, for data wranging and summarization, amongst other things, from a number of packages
+**Leah:Michael** Are we mostly just using `dplyr` here?  We should list the `tidyverse` packages we use separately, like with `ggplot2` below.
 
-+ `ggplot2`, for creating beautiful visualizations with ready data
++ `ggplot2`, for creating visualizations
 
-+ `lubridate`, for converting time data into a form that can be used
++ `lubridate`, for working with date/time data
 
-+ `MASS`, for conducting a negative binomial regression
++ `MASS`, for modeling with negative binomial regression
 
-+ `stringr`, for handling regular expressions, sets of characters that can be understood by computers
++ `stringr`, for handling regular expressions and working with text data
 
-+ `kableExtra`, for creating beautiful HTML tables
++ `kableExtra`, for creating HTML tables of results
 
-+ `gridExtra`, for creating plots of plots
++ `gridExtra`, for arranging multiple plots on a page
 
-+ `cowplot`, for extending ggplot functionality
++ `cowplot`, for extending the functionality of `ggplot2`
 
 # What is the data? 
 
-The analysis uses data from two sources:
+We will analyze data from two sources:
 
-+ [Open Baltimore](https://data.baltimorecity.gov/)
++ [Open Baltimore](https://data.baltimorecity.gov/) is a web portal with Baltimore-specific data. The portal is city-managed and regularly updated. All arrest data from the Baltimore Police Department used in this analysis is made available on Open Baltimore [here](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).  The arrest data we use in this case study was last updated on September 3, 2019.
 
-+ [American Community Survey](https://www.census.gov/programs-surveys/acs)
-
-## Open Baltimore
-
-Open Baltimore is a web portal with Baltimore-specific data. The portal is city-managed and regularly updated. All arrest data from the Baltimore Police Department used in this analysis is made available on Open Baltimore [here](https://data.baltimorecity.gov/Public-Safety/BPD-Arrests/3i3v-ibrt).
-
-## American Community Survey
-
-The American Community Survey is an ongoing survey by the US Census Bureau that captures demographic information for the United States and regions within. We will be using age, sex, and race data (tables B01001A and B01001B) for the county "Baltimore city, Maryland." This data is made available by the US Census Bureau [here](https://www.census.gov/data.html). 
++ The [American Community Survey](https://www.census.gov/programs-surveys/acs) is an ongoing survey by the United States Census Bureau that captures demographic information for the United States and regions within. We will be using age, sex, and race data (tables B01001A and B01001B) for the county "Baltimore city, Maryland." This data is made available by the US Census Bureau [here](https://www.census.gov/data.html). 
 
 # Data import {#data-import}
 
