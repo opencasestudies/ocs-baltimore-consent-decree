@@ -46,6 +46,7 @@ The purpose of this consent decree was to ensure that the Baltimore Police Depar
 ---
 
 ![](DoJ_Excerpt.png)
+
 ---
 
 (See this arcticle by the [Baltimore Sun](https://www.baltimoresun.com/news/crime/bs-md-ci-consent-decree-explainer-20180403-story.html) for more information about Baltimore's consent decree.)
@@ -870,7 +871,7 @@ head(AnalysisDF)
 ```
 
 Because we'll be analyzing temporal data, we should convert our temporal data into various units for analysis. 
-
+**Leah:Michael** The code chunk below is the one that takes all the time! I think we can do this in an easier way?
 ```{r}
 AnalysisDF <- AnalysisDF %>%
   mutate(ArrestDay = floor_date(ArrestDate,"day"),
@@ -913,7 +914,7 @@ Our data is currently grouped by date in `%Y/%m/%d` format. Given the number of 
 
 **Visit this [stackoverflow](https://stackoverflow.com/questions/18091721/align-geom-text-to-a-geom-vline-in-ggplot2) document to learn how to implement this more elegantly**
 
-```{r, message=FALSE}
+```{r, message=FALSE, eval=FALSE}
 AnalysisDF %>% group_by(ArrestDate) %>% mutate(n=sum(Arrests)) %>% ggplot(aes(x = ArrestDate, y=n))+
   geom_point(size=0.1, color="gray")+
   geom_smooth(color="black")+
@@ -938,14 +939,14 @@ We can create several plots to visualize the trend from the plot above at varyin
 
 We can use `gridExtra` to place all these plots in a single plot. This saves us output and makes the process of comparing and contrasting the plots easier. 
 
-```{r}
+```{r eval=FALSE}
 day <- AnalysisDF %>%
   group_by(day=ArrestDay) %>% mutate(n=sum(Arrests)) %>%
   ggplot(aes(x=day, y=n))+
   geom_line(color="red")
 ```
 
-```{r}
+```{r eval=FALSE}
 week <- AnalysisDF %>%
   group_by(week=ArrestWeek) %>%
   mutate(n=sum(Arrests)) %>%
@@ -953,7 +954,7 @@ week <- AnalysisDF %>%
   geom_line(color="purple")
 ```
 
-```{r}
+```{r eval=FALSE}
 month <- AnalysisDF %>%
   group_by(month=ArrestMonth) %>%
   mutate(n=sum(Arrests)) %>%
@@ -961,7 +962,7 @@ month <- AnalysisDF %>%
   geom_line(color="green")
 ```
 
-```{r}
+```{r eval=FALSE}
 quarter <- AnalysisDF %>%
   group_by(quarter=ArrestQuarter) %>%
   mutate(n=sum(Arrests)) %>%
@@ -969,7 +970,7 @@ quarter <- AnalysisDF %>%
   geom_line(color="pink")
 ```
 
-```{r}
+```{r eval=FALSE}
 season <- AnalysisDF %>%
   group_by(season=ArrestQuarter) %>%
   mutate(n=sum(Arrests)) %>%
@@ -977,7 +978,7 @@ season <- AnalysisDF %>%
   geom_line(color="blue")
 ```
 
-```{r}
+```{r eval=FALSE}
 year <- AnalysisDF %>%
   group_by(year=ArrestYear) %>%
   mutate(n=sum(Arrests)) %>%
@@ -985,7 +986,7 @@ year <- AnalysisDF %>%
   geom_line(color="orange")
 ```
 
-```{r}
+```{r eval=FALSE}
 grid.arrange(day,week,month,quarter,season,year,nrow=3,ncol=2,top="Arrests over time by different resolutions")
 ```
 
