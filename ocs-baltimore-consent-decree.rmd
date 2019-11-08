@@ -112,15 +112,27 @@ BPD_Arrests <- read_csv("BPD_Arrests.csv")
 
 Notice the number of parsing failures!  The `read_csv()` function predicts a data type for each column of the dataset using the first 1000 rows of the data file and then reads in the data according to these predicted types.  However, sometimes values later in the data file don't match the data type that has been predicted!
 
-Let's see if we can figure out where the problems are occurring! The `problems()` function allows us to retrieve information on the parsing failures we see above. We can determine which variable columns are causing problems (and how many problems there are) with the `summary()` function after some minor transformations.
+Before we dive into the parsing errors, let's take a closer look at our data.  What variables are in the data set?  We can see the names of the variable columns here:
+```{r}
+names(BPD_Arrests)
+```
 
-Let us look at some of the parsing failures identified by `read_csv()`. Note that there may be other problems with the data that aren't identified as parsing failures; errors like these may require more direct methods to identify them. 
+While some of these variable names (like `Age`, `Sex`, and `Race`) seem obvious, others are not so clear.  For example, what is the variable `Post`?  Let's look at the first few rows of the data to get a better sense of these variables:
+```{r}
+head(BPD_Arrests, n = 10) %>% as.data.frame()
+```
+
+Using the `head()` function, we can see the first 10 rows of the data; piping into `as.data.frame()` allows us to see all of the columns rather than just the ones that will print nicely on the screen as a tibble.
+
+Now we can see that we have some demographic information about the person arrested (`Age`, `Sex`, `Race`) as well as some information about the date/time of the arrest (`ArrestDate`, `ArrestTime`), information about the location of the arrest (`ArrestLocation`, `IncidentLocation`, `District`, `Post`, `Neighborhood`, `Latitude`, `Longitude`, `Location 1`), and information about the nature of the crime/arrest (`IncidentOffense`, `Charge`, `ChargeDescription`).  There is also some sort of arrest identification number given for each arrest (`Arrest`).  
+
+Now back to the parsing failures we saw earlier.  Let's see if we can figure out where the problems are occurring! The `problems()` function allows us to retrieve information on the parsing failures we see above. 
 
 ```{r}
 problems(BPD_Arrests)
 ```
 
-We see that the `problems()` function returns a tibble where each row is a parsing failure.  For each parsing failure, we are given the row number where the parsing error occurred (`row`), the name of the column in the data where it occurred (`col`), and the type of value that was expected by the parser (`expected`) as well as the value that actually occurred (`actual`).  So, for example, we see that in the 10,626 row of the data file the parser expected a double in the `Post` column but instead saw the value `ETC.` which is clearly not a double! 
+We see that the `problems()` function returns a tibble where each row is a parsing failure.  For each parsing failure, we are given the row number where the parsing error occurred (`row`), the name of the column in the data where it occurred (`col`), and the type of value that was expected by the parser (`expected`) as well as the value that actually occurred (`actual`).  So, for example, we see that in the 10,626th row of the data file the parser expected a double in the `Post` column but instead saw the value `ETC.` which is clearly not a double! 
 
 Let's look at which columns in the data file seem to be causing the problems by counting the number of errors for each value of `col`:
 ```{r}
@@ -128,55 +140,80 @@ problems(BPD_Arrests) %>%
   count(col)
 ```
 
-The parsing errors all occur in the `Latitude`, `Longitude`, and `Post` columns.  What other variables are in the data set?
+The parsing errors all occur in the `Latitude`, `Longitude`, and `Post` columns, which are all variables associated with the location of the arrest.  
 ```{r}
-names(BPD_Arrests)
+problems(BPD_Arrests) %>%
+  count(col, expected)
 ```
+It also appears that in all but one of the cases, the failure occurred because the parser was expected a double (a number) and instead saw something that looked like a character type.
 
-From the variable names we can see that we have some demographic information about the person arrested. We also have some information about the nature of the arrest. Spatial data is also available. 
+For our analysis, we won't be considering the location data, so these parsing failures may not matter for the variables that we need for our analysis.  However, it is still worth considering if there's an issue with the data file that might affect the integrity of the variables we do want to use!
 
-The object containing our data is currently a `tibble`. The `tibble` class is great for printing data neatly, but otherwise does not provide substantial advantages over the `dataframe` class. To get a peak at our data without any of the special formatting provided by the `tibble` class, we can use the functions `as.data.frame()` and `head()` to print all columns of data for the first several rows.  
-
+Let's look more closely at the rows of data where these failures occurred:
 ```{r}
-head(as.data.frame(BPD_Arrests))
+error_rows <- problems(BPD_Arrests)$row
+
+BPD_Arrests %>%
+  filter(row_number() %in% error_rows) %>%
+  as.data.frame()
 ```
+We see that there don't seem to be any issues with the variables in any of these rows, and that's because the places where the parsing failed have been filled in with `NA` values.  
 
-Now that we know what data we are working with, let's specify the classes of our columns with `read_csv()`. 
+We could consider changing the parsing type for these three columns from double to character to allow the parser to read in strings rather than numbers.  We can do this by specifying the `col_types` within the `read_csv()` function:
+```{r}
+BPD_Arrests <- read_csv("BPD_Arrests.csv", 
+                        col_types = cols(
+                          Post = col_character(),
+                          Longitude = col_character(),
+                          Latitude = col_character()
+))
+```
+Now we don't have any parsing failures!  But let's look at those rows that were causing errors before to see if we can see what the problem was:
+```{r}
+BPD_Arrests %>%
+  filter(row_number() %in% error_rows) %>%
+  as.data.frame()
+```
+We see that in these rows, the `Longitude` variable actually seems to contain the values of the neighborhood where the arrest occurred, which should be captured in the `Neighborhood` variable.  We also see that the `Post` variable contains the district names which should be captured in the `District` variable.  And the `District` variable seems to contain leftover text from the `ChargeDescription` variable.  For example, the `ChargeDescription` for the first line in the above data frame should read "GAMING/CARDS DICE ETC." perhaps, but the "DICE" was shifted into the `District` column and the "ETC." was shifted into the `Post` column.  Similarly, the second line in the above data should have a `ChargeDescription` that reads "THEFT UNDER $10" but the last "0" was shifted inot the `District` column and then following columns were also shifted by one so that the `Neighborhood` ended up in the `Longitude` column.  Further investigation of the data file `BPD_Arrests.csv` confirms this happened at the raw data level.
 
-Still, these predictions and errors are useful. With `read_csv()`, we can explicitly assign data classes. Having predictions beforehand allows us to identify potential data collection errors. This is particularly useful when a dataset has a very large number of observations. 
+**Leah:Michael** Let's add a screenshot of the .csv file showing rows 10626 and 21345 to demonstrate this.
 
-We have the option to not read in some of the data while we are specifying the classes with `read_csv()`. This can be done with the `cols_only()` function, which specifies which columns to read in. 
-
-If we run the code below, we get a parsing failure for each row with a date.
+The good news is that the all of the errors appear to happen after the `ChargeDescription` column, so that the variables we need for our analysis will be unaffected.  We can actually specify in the `read_csv()` function the columns we want to read into our dataframe, using `cols_only()` option for `cols_type`. We can also specify the data type for each of these variables.
 
 ```{r}
 BPD_Arrests <- read_csv("BPD_Arrests.csv",
-                               col_types = cols_only(Age=col_character(),
-                                                                          Sex=col_character(),
-                                                                          Race=col_character(),
-                                                                          ArrestDate=col_date()))
+                               col_types = cols_only(
+                                 Age=col_character(),
+                                 Sex=col_character(),
+                                 Race=col_character(),
+                                 ArrestDate=col_date()))
 ```
 
-This is because `read_csv` cannot read in our date data, `ArrestDate`, in its current form.
+Now we get a parsing failure for each row of the dataset that includes a date -- all 14,298 of them! We see this more closely here:
+```{r}
+problems(BPD_Arrests) %>%
+  count(col, expected)
+```
 
-For now, let's specify all of the columns we will be using as a `character class`.
+This is because `read_csv()` cannot read in our date data, `ArrestDate`, in its current form.  The default date format for the date parser is ISO8601, which contains dates in the format "2019-01-01".  Our arrest dates are given in the format "01/01/2019" instead.  We could specify this date format here in the `read_csv()` function, but instead we will simply read in the data as a character and change to the appropriate format later in the analysis when we do further work with the date variable.
 
-Using the `character` class for data allows us to convert columns of our data to the appropriate class afterward without any formatting issues. This is particularly useful when data is not in a form that `read_csv()` can use to specify a particular class like in the case above. While this may add an additional step, it makes our analysis less error-prone.
+In general, using the `character` class for data allows us to read in the data without error and then convert the variable to the appropriate class after the data import step. This is particularly useful when data is not in a default form that `read_csv()` recognizes.
 
 Let's read in the data using this more conservative approach.
 
 ```{r}
 BPD_Arrests <- read_csv("BPD_Arrests.csv",
-                               col_types = cols_only(Age=col_integer(),
-                                                                          Sex=col_character(),
-                                                                          Race=col_character(),
-                                                                          ArrestDate=col_character()))
+                               col_types = cols_only(
+                                 Age=col_integer(),
+                                 Sex=col_character(),
+                                 Race=col_character(),
+                                 ArrestDate=col_character()))
 ```
 
-Let's check if our `tibble` has any problems.
+No parsing failures!  We can also see this by seeing that the problem data frame is empty!
 
 ```{r}
-length(as.factor(as.data.frame(problems(BPD_Arrests))[,"col"]))
+problems(BPD_Arrests)
 ```
 
 ## Population Data
